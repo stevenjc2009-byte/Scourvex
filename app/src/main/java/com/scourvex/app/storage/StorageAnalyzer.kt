@@ -26,6 +26,7 @@ data class StorageReport(
     val byType: Map<String, Long>,     // Images / Videos / Audio / Documents / APKs / Archives / Other
     val entries: List<Entry>,          // every file, kept for the duplicate finder
     val privileged: Boolean,
+    val unused: List<UnusedApp>?,      // null without usage access
 )
 
 /** Biggest storage killers: files, folders, apps and file types, from one walk. */
@@ -65,9 +66,10 @@ object StorageAnalyzer {
         val byType = HashMap<String, Long>()
         for (e in files) byType.merge(typeOf(e.name), e.size, Long::plus)
 
+        val apps = apps()
         StorageReport(
             top.sortedByDescending { it.size }, folders.sortedByDescending { it.size },
-            apps(), byType, files, privileged,
+            apps, byType, files, privileged, UnusedApps.find(apps),
         )
     }
 

@@ -86,7 +86,7 @@ fun SecurityScreen(vm: MainViewModel, access: Access) {
             item { SectionTitle("Threats") }
             items(r.threats, key = { it.target + it.detection }) { t ->
                 ThreatCard(t,
-                    remove = { if (t.isApp) Perms.uninstall(ctx, t.target) else deleting = t },
+                    remove = if (!t.removable) null else { { if (t.isApp) Perms.uninstall(ctx, t.target) else deleting = t } },
                     ignore = { vm.ignoreThreat(t) })
             }
         }
@@ -94,6 +94,8 @@ fun SecurityScreen(vm: MainViewModel, access: Access) {
             item { SectionTitle("Risky apps — not malware, worth a look") }
             items(r.risks, key = { "risk:" + it.pkg }) { a -> RiskCard(a, { Perms.openAppInfo(ctx, a.pkg) }, { Perms.uninstall(ctx, a.pkg) }) }
         }
+        deviceSection(r.device, ctx)
+        sensorSection(r.sensors, ctx)
     }
 
     deleting?.let { t ->
@@ -116,7 +118,7 @@ private fun SignatureCard(info: Sigs.Info?, msg: String?, update: () -> Unit) {
             if (info == null) Text("Not downloaded yet", color = Neon.Amber, style = MaterialTheme.typography.bodyMedium)
             else {
                 Text("ClamAV daily ${info.clamDaily} · main ${info.clamMain} · built ${info.built}", color = Neon.Dim, style = MaterialTheme.typography.bodyMedium)
-                Text("%,d hashes · %,d body sigs · %,d stalkerware IOCs".format(info.md5, info.body, info.stalkerware),
+                Text("%,d hashes · %,d body sigs · %,d stalkerware · %,d spyware IOCs".format(info.md5, info.body, info.stalkerware, info.spyware),
                     color = Neon.Dim, style = MaterialTheme.typography.labelSmall)
             }
             if (msg != null) Text(msg, color = if (msg.contains("failed")) Neon.Red else Neon.Cyan, style = MaterialTheme.typography.bodyMedium)
@@ -127,7 +129,7 @@ private fun SignatureCard(info: Sigs.Info?, msg: String?, update: () -> Unit) {
 }
 
 @Composable
-private fun ThreatCard(t: Threat, remove: () -> Unit, ignore: () -> Unit) {
+private fun ThreatCard(t: Threat, remove: (() -> Unit)?, ignore: () -> Unit) {
     GlowCard(glow = if (t.pua) Neon.Amber else Neon.Red) {
         Column {
             Text(t.label, style = MaterialTheme.typography.titleMedium, color = Neon.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -136,7 +138,7 @@ private fun ThreatCard(t: Threat, remove: () -> Unit, ignore: () -> Unit) {
             Text(t.target, color = Neon.Dim, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.StartEllipsis)
             Gap(8)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GhostButton(if (t.isApp) "Uninstall" else "Delete", color = Neon.Red, onClick = remove)
+                if (remove != null) GhostButton(if (t.isApp) "Uninstall" else "Delete", color = Neon.Red, onClick = remove)
                 GhostButton("Ignore", color = Neon.Dim, onClick = ignore)
             }
         }

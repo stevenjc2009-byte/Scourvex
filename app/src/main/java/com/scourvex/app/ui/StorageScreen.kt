@@ -45,7 +45,7 @@ import com.scourvex.app.ui.components.ScanOrb
 import com.scourvex.app.ui.components.SectionTitle
 import com.scourvex.app.ui.theme.Neon
 
-private enum class View(val label: String) { TYPES("Types"), FILES("Files"), FOLDERS("Folders"), APPS("Apps"), DUPES("Duplicates") }
+private enum class View(val label: String) { TYPES("Types"), FILES("Files"), FOLDERS("Folders"), APPS("Apps"), UNUSED("Unused"), DUPES("Duplicates") }
 
 @Composable
 fun StorageScreen(vm: MainViewModel, access: Access) {
@@ -135,6 +135,7 @@ fun StorageScreen(vm: MainViewModel, access: Access) {
                     Gap()
                 }
             }
+            View.UNUSED -> unusedApps(r.unused, vm, ctx)
             View.DUPES -> when (val d = dupes) {
                 Dupes.Idle -> item { NeonButton("Find duplicates", Modifier.fillMaxWidth(), enabled = !vm.busy) { vm.findDuplicates() } }
                 is Dupes.Hashing -> item {

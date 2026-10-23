@@ -43,6 +43,11 @@ object Perms {
         open(ctx, launch ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api")))
     }
 
+    /** Opens a settings screen by action, for one app when [pkg] is given; falls back to the app's info page or Settings. */
+    fun openAction(ctx: Context, action: String, pkg: String? = null) = open(ctx,
+        pkg?.let { Intent(action, Uri.parse("package:$it")) }, Intent(action),
+        pkg?.let { Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$it")) }, Intent(Settings.ACTION_SETTINGS))
+
     fun openUrl(ctx: Context, url: String) = open(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 
     private fun open(ctx: Context, vararg intents: Intent?) {

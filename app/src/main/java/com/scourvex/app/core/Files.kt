@@ -97,7 +97,8 @@ object Files {
 
     /** Deletes a file or folder tree. Returns bytes freed (0 if already gone, -1 on failure). */
     suspend fun delete(path: String): Long {
-        if (isRestricted(path)) {
+        // /data/... (spyware drop folders like /data/local/tmp) is only reachable as the shell user.
+        if (isRestricted(path) || path.startsWith("/data/")) {
             val s = Shell.get() ?: return -1
             return runCatching { s.delete(path) }.getOrDefault(-1)
         }

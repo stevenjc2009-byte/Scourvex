@@ -22,6 +22,7 @@ import com.scourvex.app.storage.DuplicateGroup
 import com.scourvex.app.storage.Duplicates
 import com.scourvex.app.storage.StorageAnalyzer
 import com.scourvex.app.storage.StorageReport
+import com.scourvex.app.storage.UnusedApps
 import com.scourvex.app.update.Updater
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,7 +76,18 @@ class MainViewModel : ViewModel() {
             if (!Sigs.installed) updateSignatures()
             Updater.checkIfDue()
         }
+        viewModelScope.launch {
+            UnusedApps.results.collect { (pkg, error) ->
+                if (error != null) { toast.value = "Could not archive: $error"; return@collect }
+                val s = store.value as? Store.Done ?: return@collect
+                val name = s.report.unused?.firstOrNull { it.pkg == pkg }?.label ?: pkg
+                toast.value = "Archived $name"
+                store.value = Store.Done(s.report.copy(unused = s.report.unused?.filter { it.pkg != pkg }))
+            }
+        }
     }
+
+    fun archiveApp(pkg: String) = viewModelScope.launch { UnusedApps.archive(pkg) }
 
     val busy: Boolean get() = job?.isActive == true
 

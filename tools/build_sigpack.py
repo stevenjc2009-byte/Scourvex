@@ -12,6 +12,8 @@ Output zip (read by app/src/main/java/com/scourvex/app/security/SigPack.kt):
   fp.txt           hex:size             (ClamAV false-positive whitelist)
   body.txt         N<TAB>ndb-line  /  L<TAB>ldb-line (only syntax the app's matcher supports)
   stalkerware.tsv  pkg<TAB>package<TAB>app  /  cert<TAB>SHA1<TAB>app
+  spyware.tsv      kind<TAB>value<TAB>label, kind = pkg | cert1 | cert256 | prop | path
+                   (MVT indicators; their APK SHA-256 hashes go into sha.txt)
   mbz.txt          always empty; kept so app v1.0.0-1.0.1 can still read the pack
 """
 import datetime
@@ -130,6 +132,57 @@ def stalkerware() -> list[str]:
     return out
 
 
+MVT_INDEX = "https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/indicators.yaml"
+STIX = re.compile(r"\[(app:id|app:cert\.sha1|app:cert\.sha256|file:hashes\.sha256|android-property:name|file:path)\s*=\s*'([^']+)'\]")
+SPY_KINDS = {"app:id": "pkg", "app:cert.sha1": "cert1", "app:cert.sha256": "cert256",
+             "android-property:name": "prop", "file:path": "path"}
+
+
+def spyware() -> tuple[list[str], list[str]]:
+    """MVT / Amnesty / Citizen Lab STIX2 indicators, Android-usable parts only.
+    Returns (spyware.tsv lines, sha.txt lines for APK hashes)."""
+    def get(url: str) -> bytes:
+        return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=60).read()
+
+    index = get(MVT_INDEX).decode()
+    tsv, sha = set(), set()
+    for block in index.split("\n  -\n"):
+        f = {k: re.search(rf"^\s+{k}: (\S+)", block, re.M) for k in ("owner", "repo", "branch", "path")}
+        if not all(f.values()):
+            continue
+        url = "https://raw.githubusercontent.com/{}/{}/{}/{}".format(*(f[k][1] for k in ("owner", "repo", "branch", "path")))
+        try:
+            objs = json.loads(get(url))["objects"]
+        except Exception as e:  # one broken feed must not stop the daily pack
+            print("skip", url, e, file=sys.stderr)
+            continue
+        malware = {o["id"]: o["name"] for o in objs if o.get("type") == "malware"}
+        fallback = next(iter(malware.values()), Path(url).stem)
+        owner = {o["source_ref"]: malware.get(o["target_ref"], fallback) for o in objs
+                 if o.get("type") == "relationship" and o.get("relationship_type") == "indicates"}
+        stalker = "stalkerware" in url.lower()
+        for o in objs:
+            if o.get("type") != "indicator":
+                continue
+            name = re.sub(r"[^A-Za-z0-9_.-]+", "_", owner.get(o["id"], fallback)).strip("_")
+            label = ("Stalkerware." if stalker else "Spyware.") + name
+            for kind, value in STIX.findall(o.get("pattern", "")):
+                if kind == "file:hashes.sha256":
+                    if re.fullmatch(r"[0-9a-fA-F]{64}", value):
+                        sha.add(f"{value.lower()}:*:{label}")
+                elif stalker:
+                    continue  # its packages and certs are already in stalkerware.tsv (same Echap source)
+                elif kind == "file:path":
+                    # Only Android paths the app can check; iOS paths are useless here.
+                    if value.startswith(("/data/", "/sdcard/", "/storage/")):
+                        tsv.add(f"path\t{value}\t{label}")
+                elif kind.startswith("app:cert"):
+                    tsv.add(f"{SPY_KINDS[kind]}\t{value.lower().replace(':', '')}\t{label}")
+                else:
+                    tsv.add(f"{SPY_KINDS[kind]}\t{value}\t{label}")
+    return sorted(tsv), sorted(sha)
+
+
 def main() -> None:
     src, out = Path(sys.argv[1]), Path(sys.argv[2])
     cvds = {n: read_cvd(src / f"{n}.cvd" if (src / f"{n}.cvd").exists() else src / f"{n}.cld") for n in ("main", "daily")}
@@ -184,6 +237,8 @@ def main() -> None:
         recs += struct.pack("<I", size) + h + struct.pack("<I", len(names))
         names.append(name)
     stalk = stalkerware()
+    spy, spy_sha = spyware()
+    sha += spy_sha
 
     manifest = {
         "format": 1,
@@ -191,6 +246,7 @@ def main() -> None:
         "clamav": {n: {"version": c["version"], "built": c["built"]} for n, c in cvds.items()},
         "counts": {"md5": len(names), "sha": len(sha), "fp": len(fp), "body": len(body),
                    "body_unsupported": dropped, "stalkerware": len(stalk),
+                   "spyware": len(spy) + len(spy_sha),
                    "malwarebazaar": 0},  # app v1.0.0-1.0.1 require this key
     }
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
@@ -201,6 +257,7 @@ def main() -> None:
         z.writestr("fp.txt", "\n".join(fp))
         z.writestr("body.txt", "\n".join(body))
         z.writestr("stalkerware.tsv", "\n".join(stalk))
+        z.writestr("spyware.tsv", "\n".join(spy))
         z.writestr("mbz.txt", "")  # app v1.0.0-1.0.1 read this file
     print(json.dumps(manifest, indent=1))
     print("bytes", out.stat().st_size)

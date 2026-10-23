@@ -125,6 +125,7 @@ fun SettingsScreen(vm: MainViewModel, access: Access) {
             Text(
                 "Virus signatures: ClamAV (Cisco Talos), GPL-2.0, rebuilt daily into the Scourvex signature pack.\n" +
                     "Stalkerware indicators: Echap stalkerware-indicators, CC BY 4.0.\n" +
+                    "Spyware indicators: MVT project (Amnesty International, Citizen Lab and others), MIT.\n" +
                     "Junk locations informed by SD Maid SE's open filter research.\n" +
                     "Source: github.com/${BuildConfig.GITHUB_REPO}",
                 color = Neon.Dim, style = MaterialTheme.typography.bodyMedium,

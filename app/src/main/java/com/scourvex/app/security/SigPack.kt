@@ -5,7 +5,7 @@ import java.util.zip.ZipFile
 
 /**
  * The signature pack built by tools/build_sigpack.py from real ClamAV databases
- * (plus stalkerware-indicators). Loaded fully into memory.
+ * (plus stalkerware-indicators and MVT spyware indicators). Loaded fully into memory.
  */
 class SigPack private constructor(
     val manifest: String,
@@ -19,7 +19,16 @@ class SigPack private constructor(
     val bodySkipped: Int,
     val stalkerPkgs: Map<String, String>, // package -> stalkerware family
     val stalkerCerts: Map<String, String>,// cert SHA1 (lowercase hex) -> family
+    val spyware: Spyware,
 ) {
+    /** MVT indicators (Amnesty, Citizen Lab, Google, Lookout...): label per value. */
+    class Spyware(
+        val pkgs: Map<String, String>,
+        val certs: Map<String, String>,   // signing cert SHA1 or SHA256, lowercase hex
+        val props: Map<String, String>,   // system property names
+        val paths: Map<String, String>,   // files only shell can see, e.g. /data/local/tmp/...
+    )
+
     val md5Count: Int get() = sizes.size
     val shaCount: Int get() = sha.values.sumOf { it.size }
 
@@ -122,7 +131,16 @@ class SigPack private constructor(
                 if (p[0] == "pkg") pkgs[p[1]] = p[2] else if (p[0] == "cert") certs[p[1].lowercase()] = p[2]
             }
 
-            SigPack(manifest, sizes, md5s, names, starts, sha, fp, body, skipped, pkgs, certs)
+            val spy = mapOf("pkg" to HashMap<String, String>(), "cert1" to HashMap(), "cert256" to HashMap(),
+                "prop" to HashMap(), "path" to HashMap())
+            for (ln in lines("spyware.tsv")) {
+                val p = ln.split('	')
+                if (p.size >= 3) spy[p[0]]?.put(p[1], p[2])
+            }
+            val spyware = Spyware(spy.getValue("pkg"), spy.getValue("cert1") + spy.getValue("cert256"),
+                spy.getValue("prop"), spy.getValue("path"))
+
+            SigPack(manifest, sizes, md5s, names, starts, sha, fp, body, skipped, pkgs, certs, spyware)
         }
 
         private fun u32(b: ByteArray, o: Int): Long =

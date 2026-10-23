@@ -24,8 +24,9 @@ data class Threat(
     val isApp: Boolean,
     val label: String,
     val detection: String,
-    val source: String,        // "ClamAV", "Stalkerware IOC"
+    val source: String,        // "ClamAV", "Stalkerware IOC", "Spyware IOC (MVT)"
     val size: Long,
+    val removable: Boolean = true, // false for traces like a system property: nothing to delete
 ) {
     val pua: Boolean get() = detection.startsWith("PUA.")
 }
@@ -41,6 +42,8 @@ data class ThreatReport(
     val appsScanned: Int,
     val privileged: Boolean,
     val signatures: Sigs.Info?,
+    val device: List<DeviceFinding>,
+    val sensors: List<SensorUse.AppUse>?, // null without Shizuku
 )
 
 /** The real security scan: installed apps, then every file on storage. */
@@ -71,7 +74,10 @@ object ThreatScanner {
                 threats += Threat(info.packageName, true, label, det, src, size)
             }
             pack.stalkerPkgs[info.packageName]?.let { hit("Stalkerware.$it", "Stalkerware IOC") }
-            for (cert in certSha1s(info)) pack.stalkerCerts[cert]?.let { hit("Stalkerware.$it (signing key)", "Stalkerware IOC") }
+            val certs = certs(info)
+            for (cert in certs) pack.stalkerCerts[cert]?.let { hit("Stalkerware.$it (signing key)", "Stalkerware IOC") }
+            pack.spyware.pkgs[info.packageName]?.let { hit(it, SpywareCheck.SOURCE) }
+            for (cert in certs) pack.spyware.certs[cert]?.let { hit("$it (signing key)", SpywareCheck.SOURCE) }
             audit.audit(info, label)?.let { risks += it }
 
             val system = app.flags and ApplicationInfo.FLAG_SYSTEM != 0 && app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP == 0
@@ -79,7 +85,7 @@ object ThreatScanner {
                 for (apk in listOfNotNull(app.sourceDir) + (app.splitSourceDirs ?: emptyArray())) {
                     val f = File(apk)
                     val v = inspector.inspect(apk, f.length()) { runCatching { FileInputStream(f) }.getOrNull() }
-                    v.detections.forEach { hit(it, "ClamAV", f.length()) }
+                    v.detections.forEach { hit(it, source(it), f.length()) }
                 }
             }
         }
@@ -105,7 +111,7 @@ object ThreatScanner {
                         val v = runCatching { ins.inspect(e.path, e.size) { Files.open(e.path) } }.getOrNull() ?: continue
                         if (v.inspected) inspected.incrementAndGet()
                         synchronized(lock) {
-                            v.detections.forEach { d -> threats += Threat(e.path, false, e.name, d, "ClamAV", e.size) }
+                            v.detections.forEach { d -> threats += Threat(e.path, false, e.name, d, source(d), e.size) }
                         }
                     }
                     synchronized(lock) { bytes += ins.bytesRead }
@@ -113,16 +119,28 @@ object ThreatScanner {
             }
         }
 
+        progress(ThreatProgress("Device", "Checking settings and spyware traces…", 0, 0, threats.size))
+        threats += SpywareCheck.run(pack.spyware)
+        val device = DeviceAudit.run(ctx)
+        val sensors = SensorUse.read()
+
         val visible = threats.filter { it.target !in ignored }.distinctBy { it.target to it.detection }
         ThreatReport(
             visible, risks.filter { it.pkg !in ignored }.sortedByDescending { it.score },
-            entries.size, inspected.get(), bytes, pkgs.size, privileged, Sigs.info.value,
+            entries.size, inspected.get(), bytes, pkgs.size, privileged, Sigs.info.value, device, sensors,
         )
     }
 
-    private fun certSha1s(info: PackageInfo): List<String> {
+    /** Hash detections from the MVT indicators are named Spyware.* / Stalkerware.* by the pack builder. */
+    private fun source(det: String) =
+        if (det.startsWith("Spyware.") || det.startsWith("Stalkerware.")) SpywareCheck.SOURCE else "ClamAV"
+
+    /** SHA-1 and SHA-256 of every signing cert, lowercase hex. */
+    private fun certs(info: PackageInfo): List<String> {
         val si = info.signingInfo ?: return emptyList()
         val certs = if (si.hasMultipleSigners()) si.apkContentsSigners else si.signingCertificateHistory
-        return certs.orEmpty().map { FileInspector.hex(MessageDigest.getInstance("SHA-1").digest(it.toByteArray())) }
+        return certs.orEmpty().flatMap { c ->
+            listOf("SHA-1", "SHA-256").map { FileInspector.hex(MessageDigest.getInstance(it).digest(c.toByteArray())) }
+        }
     }
 }

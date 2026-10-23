@@ -1,0 +1,322 @@
+    Package com.android.phone:
+      FINE_LOCATION (allow): 
+      MANAGE_IPSEC_TUNNELS (allow): 
+    Package com.android.dynsystem:
+      INTERACT_ACROSS_PROFILES (default): 
+    Package android:
+      COARSE_LOCATION (allow): 
+          Access: [pers-s] 2026-10-23 15:55:41.101 (-5m30s476ms)
+      READ_CONTACTS (allow): 
+          Access: [pers-s] 2026-10-23 15:55:54.122 (-5m17s455ms)
+      SYSTEM_ALERT_WINDOW (default): 
+          Access: [pers-s] 2026-10-23 15:56:04.634 (-5m6s943ms) duration=+5m6s947ms
+      AUDIO_MEDIA_VOLUME (allow): 
+          Access: [pers-s] 2026-10-23 08:52:23.547 (-7h8m48s30ms)
+      WAKE_LOCK (allow): 
+          Access: [pers-s] 2026-10-23 16:00:40.224 (-31s353ms) duration=+2ms
+      MONITOR_LOCATION (allow / switch COARSE_LOCATION=allow): 
+          Access: [pers-s] 2026-10-23 15:55:41.005 (-5m30s572ms) duration=+5m30s578ms
+          Access: [pers-s] 2026-10-23 15:55:40.926 (-5m30s651ms) duration=+5m30s657ms
+      GET_USAGE_STATS (default): 
+          Access: [pers-s] 2026-10-23 16:00:06.566 (-1m5s11ms)
+      INTERACT_ACROSS_PROFILES (default): 
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+          Access: [pers-s] 2026-10-23 16:01:03.922 (-7s655ms)
+          Access: [pers-s] 2026-10-23 15:55:47.473 (-5m24s104ms)
+      BLUETOOTH_CONNECT (allow): 
+          Access: [pers-s] 2026-10-23 16:01:04.636 (-6s941ms)
+    Package com.android.providers.settings:
+      MANAGE_EXTERNAL_STORAGE (default): 
+          Access: [pers-s] 2026-10-23 08:52:42.981 (-7h8m28s596ms)
+      INTERACT_ACROSS_PROFILES (default): 
+    Package com.android.inputdevices:
+      INTERACT_ACROSS_PROFILES (default): 
+    Package com.android.server.telecom:
+      READ_CALL_LOG (allow): 
+          Access: [pers-s] 2026-10-23 15:55:48.802 (-5m22s775ms)
+      INTERACT_ACROSS_PROFILES (default): 
+    Package com.android.keychain:
+      INTERACT_ACROSS_PROFILES (default): 
+    Package com.android.localtransport:
+      INTERACT_ACROSS_PROFILES (default): 
+    Package com.android.DeviceAsWebcam:
+      INTERACT_ACROSS_PROFILES (default): 
+    Package com.android.emulator.multidisplay:
+      INTERACT_ACROSS_PROFILES (default): 
+    Package com.android.settings:
+      GET_USAGE_STATS (default): 
+          Access: [pers-s] 2026-10-23 08:52:20.784 (-7h8m50s793ms)
+      INTERACT_ACROSS_PROFILES (default): 
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+          Access: [pers-s] 2026-10-23 15:57:41.404 (-3m30s173ms)
+      BLUETOOTH_CONNECT (allow): 
+          Access: [pers-s] 2026-10-23 15:56:23.235 (-4m48s342ms)
+      MEDIA_ROUTING_CONTROL (default): 
+          Access: [pers-s] 2026-10-23 15:56:22.538 (-4m49s39ms)
+    Package com.android.location.fused:
+      INTERACT_ACROSS_PROFILES (default): 
+    Package com.android.phone:
+      WAKE_LOCK (allow): 
+          Access: [pers-s] 2026-10-23 16:00:00.289 (-1m11s288ms)
+      MANAGE_IPSEC_TUNNELS (allow): 
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+    Package com.google.android.bluetooth:
+      READ_CONTACTS (allow): 
+          Access: [pers-s] 2026-10-23 15:55:46.190 (-5m25s387ms)
+      GET_USAGE_STATS (default): 
+      BLUETOOTH_CONNECT (allow): 
+          Access: [pers-s] 2026-10-23 15:55:57.500 (-5m14s77ms)
+    Package audioserver:
+      WAKE_LOCK (allow): 
+          Access: [cch-s] 2026-10-23 15:56:09.353 (-5m2s224ms) duration=+3s18ms
+      GET_USAGE_STATS (default): 
+    Package com.google.android.networkstack.tethering:
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+    Package com.google.android.cellbroadcastservice:
+      WAKE_LOCK (allow): 
+          Access: [pers-s] 2026-10-23 15:55:57.422 (-5m14s155ms) duration=+3s32ms
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+    Package com.android.shell:
+      GET_USAGE_STATS (default): 
+      WRITE_MEDIA_VIDEO (deny): 
+      WRITE_MEDIA_IMAGES (deny): 
+      MANAGE_EXTERNAL_STORAGE (default): 
+    Package com.android.providers.blockednumber:
+      READ_CALL_LOG (allow): 
+          Access: [fg-s] 2026-10-23 15:55:47.950 (-5m23s627ms)
+      WRITE_CALL_LOG (allow): 
+          Access: [fg-s] 2026-10-23 15:55:47.984 (-5m23s593ms)
+    Package com.android.providers.contacts:
+      READ_CALL_LOG (allow): 
+          Access: [fg-s] 2026-10-23 09:17:36.409 (-6h43m35s168ms)
+          Access: [cch-s] 2026-10-23 08:57:52.447 (-7h3m19s130ms)
+      WRITE_CALL_LOG (allow): 
+          Access: [fg-s] 2026-10-23 09:17:36.422 (-6h43m35s155ms)
+          Access: [cch-s] 2026-10-23 08:57:52.510 (-7h3m19s67ms)
+    Package com.android.providers.calendar:
+      WAKE_LOCK (allow): 
+          Access: [bg-s] 2026-10-23 15:56:11.521 (-5m0s56ms) duration=+4ms
+    Package com.android.cellbroadcastreceiver:
+      READ_CELL_BROADCASTS (allow): 
+    Package com.google.android.as:
+      READ_CONTACTS (allow): 
+          Access: [fg-s] 2026-10-23 15:56:05.329 (-5m6s248ms)
+      READ_CALL_LOG (allow): 
+          Access: [fg-s] 2026-10-23 15:56:04.487 (-5m7s90ms)
+      READ_SMS (allow): 
+          Access: [fg-s] 2026-10-23 15:56:07.530 (-5m4s47ms)
+      GET_USAGE_STATS (default): 
+      RECEIVE_SENSITIVE_NOTIFICATIONS (ignore): 
+          Access: [fg-s] 2026-10-23 15:55:56.177 (-5m15s400ms)
+    Package com.google.android.dialer:
+      READ_CONTACTS (allow): 
+          Access: [bg-s] 2026-10-23 15:55:50.333 (-5m21s244ms)
+      READ_CALL_LOG (allow): 
+          Access: [bg-s] 2026-10-23 15:55:57.829 (-5m13s748ms)
+      SYSTEM_ALERT_WINDOW (allow): 
+          Access: [cch-s] 2026-10-23 15:55:39.304 (-5m32s273ms)
+      WAKE_LOCK (allow): 
+          Access: [bg-s] 2026-10-23 15:55:57.301 (-5m14s276ms) duration=+224ms
+      READ_PHONE_STATE (allow): 
+          Access: [bg-s] 2026-10-23 15:55:39.589 (-5m31s988ms)
+          Access: [cch-s] 2026-10-23 15:55:38.820 (-5m32s757ms)
+      ADD_VOICEMAIL (allow): 
+          Access: [bg-s] 2026-10-23 16:00:04.953 (-1m6s624ms)
+          Access: [cch-s] 2026-10-23 08:57:53.589 (-7h3m17s988ms)
+      GET_ACCOUNTS (allow): 
+          Access: [bg-tpd] 2026-10-23 16:00:05.281 (-1m6s296ms) proxy[uid=10155, pkg=com.google.android.gms, attributionTag=com.google.android.gms.usagereporting]
+          Access: [cch-tpd] 2026-10-23 15:57:20.802 (-3m50s775ms) proxy[uid=10155, pkg=com.google.android.gms, attributionTag=com.google.android.gms.usagereporting]
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+    Package com.android.imsserviceentitlement:
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+    Package com.google.android.odad:
+      SYSTEM_ALERT_WINDOW (allow): 
+    Package com.android.vending:
+      WAKE_LOCK (allow): 
+          Access: [fg-s] 2026-10-23 08:52:13.086 (-7h8m58s491ms) duration=+530ms
+          Access: [bg-s] 2026-10-23 08:52:13.616 (-7h8m57s961ms) duration=+2s923ms
+      GET_USAGE_STATS (default): 
+      START_FOREGROUND (allow): 
+          Access: [fgsvc-s] 2026-10-23 08:54:14.762 (-7h6m56s815ms) duration=+1s367ms
+          Access: [fg-s] 2026-10-23 08:54:13.596 (-7h6m57s981ms) duration=+852ms
+          Access: [bg-s] 2026-10-23 08:54:14.448 (-7h6m57s129ms) duration=+314ms
+      WRITE_MEDIA_AUDIO (deny): 
+      WRITE_MEDIA_VIDEO (deny): 
+      WRITE_MEDIA_IMAGES (deny): 
+      MANAGE_EXTERNAL_STORAGE (default): 
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+    Package com.google.android.apps.messaging:
+      READ_CONTACTS (allow): 
+          Access: [fg-s] 2026-10-23 15:56:25.673 (-4m45s904ms)
+      READ_SMS (allow): 
+          Access: [fgsvc-s] 2026-10-23 15:56:11.617 (-4m59s960ms)
+          Access: [fg-s] 2026-10-23 15:56:12.099 (-4m59s478ms)
+          Access: [cch-s] 2026-10-23 08:53:04.690 (-7h8m6s887ms)
+      WRITE_SMS (ignore): 
+          Access: [fgsvc-s] 2026-10-23 08:53:08.258 (-7h8m3s319ms)
+      SYSTEM_ALERT_WINDOW (default): 
+      WAKE_LOCK (allow): 
+          Access: [fgsvc-s] 2026-10-23 15:56:11.146 (-5m0s431ms) duration=+544ms
+          Access: [fg-s] 2026-10-23 15:56:24.533 (-4m47s44ms) duration=+1s297ms
+          Access: [bg-s] 2026-10-23 08:52:59.620 (-7h8m11s957ms) duration=+3s460ms
+      GET_USAGE_STATS (default): 
+      START_FOREGROUND (allow): 
+          Access: [fgsvc-s] 2026-10-23 15:56:11.146 (-5m0s431ms) duration=+556ms
+          Access: [fg-s] 2026-10-23 15:56:11.126 (-5m0s451ms) duration=+20ms
+          Access: [cch-s] 2026-10-23 08:53:04.864 (-7h8m6s713ms) duration=+39ms
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+    Package com.google.android.gms:
+      COARSE_LOCATION (allow): 
+      FINE_LOCATION (allow): 
+          Access: [fg-s] 2026-10-23 15:55:55.359 (-5m16s218ms)
+          Access: [fg-s] 2026-10-23 15:55:59.469 (-5m12s108ms)
+          Access: [fg-s] 2026-10-23 15:56:17.567 (-4m54s10ms)
+      READ_CONTACTS (allow): 
+          Access: [fg-s] 2026-10-23 08:52:20.130 (-7h8m51s447ms)
+          Access: [fg-s] 2026-10-23 15:56:22.625 (-4m48s952ms)
+          Access: [fg-s] 2026-10-23 15:56:17.477 (-4m54s100ms)
+      WRITE_CONTACTS (allow): 
+          Access: [fg-s] 2026-10-23 08:54:04.567 (-7h7m7s10ms)
+      READ_CALL_LOG (allow): 
+          Access: [fg-s] 2026-10-23 16:00:06.645 (-1m4s932ms)
+      WIFI_SCAN (allow / switch COARSE_LOCATION=allow): 
+          Access: [top-s] 2026-10-23 08:52:04.678 (-7h9m6s899ms)
+          Access: [fg-s] 2026-10-23 15:56:10.597 (-5m0s980ms)
+          Access: [fg-s] 2026-10-23 08:52:21.760 (-7h8m49s817ms)
+          Access: [fg-s] 2026-10-23 15:55:55.367 (-5m16s210ms)
+          Access: [fg-s] 2026-10-23 15:56:10.650 (-5m0s927ms)
+          Access: [fg-s] 2026-10-23 08:52:21.694 (-7h8m49s883ms)
+      READ_SMS (allow): 
+          Access: [fg-s] 2026-10-23 16:00:06.634 (-1m4s943ms)
+      WAKE_LOCK (allow): 
+          Access: [fg-s] 2026-10-23 15:58:05.513 (-3m6s64ms) duration=+348ms
+      MONITOR_LOCATION (allow / switch COARSE_LOCATION=allow): 
+          Access: [fg-s] 2026-10-23 15:56:22.030 (-4m49s547ms) duration=+4m49s579ms
+          Access: [fgsvc-s] 2026-10-23 09:11:32.964 (-6h49m38s613ms) duration=+1s231ms
+          Access: [fg-s] 2026-10-23 15:56:23.241 (-4m48s336ms) duration=+4m48s368ms
+          Access: [fg-s] 2026-10-23 15:56:23.712 (-4m47s865ms) duration=+4m47s896ms
+      GET_USAGE_STATS (default): 
+      GET_ACCOUNTS (allow): 
+          Access: [fg-tp] 2026-10-23 16:00:05.281 (-1m6s296ms)
+          Access: [bg-tp] 2026-10-23 15:55:39.639 (-5m31s938ms)
+      BLUETOOTH_SCAN (allow): 
+          Access: [fg-s] 2026-10-23 15:56:15.714 (-4m55s863ms)
+      USE_BIOMETRIC (allow): 
+          Access: [fg-s] 2026-10-23 08:54:31.648 (-7h6m39s929ms)
+      ACTIVITY_RECOGNITION (allow): 
+          Access: [fgsvc-s] 2026-10-23 09:11:32.964 (-6h49m38s613ms) duration=+1s231ms
+          Access: [fg-s] 2026-10-23 15:56:23.289 (-4m48s288ms) duration=+4m48s318ms
+      READ_MEDIA_AUDIO (allow): 
+          Access: [fg-s] 2026-10-23 15:56:18.024 (-4m53s553ms)
+      WRITE_MEDIA_AUDIO (deny): 
+      READ_MEDIA_VIDEO (allow): 
+          Access: [fg-s] 2026-10-23 15:56:18.027 (-4m53s550ms)
+      WRITE_MEDIA_VIDEO (deny): 
+      READ_MEDIA_IMAGES (allow): 
+          Access: [fg-s] 2026-10-23 15:56:18.010 (-4m53s567ms)
+      WRITE_MEDIA_IMAGES (deny): 
+      MANAGE_EXTERNAL_STORAGE (default): 
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+      FINE_LOCATION_SOURCE (allow / switch FINE_LOCATION=allow): 
+          Access: [top-s] 2026-10-23 08:52:04.678 (-7h9m6s899ms)
+          Access: [fg-s] 2026-10-23 15:56:10.597 (-5m0s980ms)
+          Access: [fg-s] 2026-10-23 08:52:21.760 (-7h8m49s817ms)
+          Access: [fg-s] 2026-10-23 15:56:10.650 (-5m0s927ms)
+          Access: [fg-s] 2026-10-23 08:52:21.694 (-7h8m49s883ms)
+      BLUETOOTH_CONNECT (allow): 
+          Access: [fg-s] 2026-10-23 15:56:20.744 (-4m50s833ms)
+          Access: [fg-s] 2026-10-23 15:56:16.066 (-4m55s511ms)
+          Access: [top-s] 2026-10-23 08:52:05.530 (-7h9m6s47ms)
+          Access: [fg-s] 2026-10-23 08:52:40.728 (-7h8m30s849ms)
+          Access: [fg-s] 2026-10-23 15:56:27.233 (-4m44s344ms)
+      ACTIVITY_RECOGNITION_SOURCE (allow / switch ACTIVITY_RECOGNITION=allow): 
+          Access: [top-s] 2026-10-23 08:52:04.020 (-7h9m7s557ms) duration=+1s532ms
+          Access: [fgsvc-s] 2026-10-23 09:11:32.964 (-6h49m38s613ms) duration=+1s231ms
+          Access: [fg-s] 2026-10-23 15:56:07.365 (-5m4s212ms) duration=+5m4s244ms
+      NEARBY_WIFI_DEVICES (allow): 
+          Access: [fg-s] 2026-10-23 15:56:17.526 (-4m54s51ms)
+      READ_MEDIA_VISUAL_USER_SELECTED (allow): 
+          Access: [fg-s] 2026-10-23 15:56:17.989 (-4m53s588ms)
+    Package com.google.android.apps.safetyhub:
+      WAKE_LOCK (allow): 
+          Access: [bg-s] 2026-10-23 15:56:14.563 (-4m57s14ms) duration=+218ms
+    Package com.google.android.googlequicksearchbox:
+      SYSTEM_ALERT_WINDOW (allow): 
+      WAKE_LOCK (allow): 
+          Access: [fg-s] 2026-10-23 15:56:16.866 (-4m54s711ms) duration=+249ms
+    Package com.google.android.apps.wellbeing:
+      WAKE_LOCK (allow): 
+          Access: [fg-s] 2026-10-23 08:52:17.158 (-7h8m54s419ms) duration=+1s179ms
+          Access: [bg-s] 2026-10-23 08:52:04.959 (-7h9m6s618ms) duration=+1s272ms
+      START_FOREGROUND (allow): 
+          Access: [fgsvc-s] 2026-10-23 09:11:32.964 (-6h49m38s613ms) duration=+959ms
+          Access: [fg-s] 2026-10-23 09:11:32.568 (-6h49m39s9ms) duration=+395ms
+    Package com.android.chrome:
+      SYSTEM_ALERT_WINDOW (default): 
+      MANAGE_EXTERNAL_STORAGE (default): 
+    Package com.google.android.tts:
+      WAKE_LOCK (allow): 
+          Access: [fg-s] 2026-10-23 08:52:12.728 (-7h8m58s849ms) duration=+1s922ms
+    Package com.google.android.inputmethod.latin:
+      VIBRATE (allow): 
+          Access: [fg-s] 2026-10-23 09:19:54.034 (-6h41m17s543ms) duration=+105ms
+      SYSTEM_ALERT_WINDOW (default): 
+      READ_CLIPBOARD (allow): 
+          Access: [bg-s] 2026-10-23 15:56:01.559 (-5m10s18ms)
+    Package com.google.android.apps.photos:
+      WAKE_LOCK (allow): 
+          Access: [fg-s] 2026-10-23 08:55:42.657 (-7h5m28s920ms) duration=+33ms
+          Access: [bg-s] 2026-10-23 15:56:32.323 (-4m39s254ms) duration=+44ms
+      READ_MEDIA_AUDIO (allow): 
+          Access: [bg-s] 2026-10-23 09:04:55.177 (-6h56m16s400ms)
+      READ_MEDIA_VIDEO (allow): 
+          Access: [bg-s] 2026-10-23 09:04:55.177 (-6h56m16s400ms)
+      READ_MEDIA_IMAGES (allow): 
+          Access: [bg-s] 2026-10-23 09:04:55.177 (-6h56m16s400ms)
+      MANAGE_EXTERNAL_STORAGE (default): 
+      READ_MEDIA_VISUAL_USER_SELECTED (allow): 
+          Access: [bg-s] 2026-10-23 09:04:55.177 (-6h56m16s400ms)
+    Package com.google.android.accessibility.switchaccess:
+      BIND_ACCESSIBILITY_SERVICE (allow): 
+          Access: [bg-s] 2026-10-23 08:53:01.346 (-7h8m10s231ms)
+          Access: [cch-s] 2026-10-23 15:56:32.887 (-4m38s690ms)
+    Package com.google.android.apps.accessibility.voiceaccess:
+      BIND_ACCESSIBILITY_SERVICE (allow): 
+          Access: [cch-s] 2026-10-23 15:56:32.889 (-4m38s688ms)
+    Package com.google.android.marvin.talkback:
+      BIND_ACCESSIBILITY_SERVICE (allow): 
+          Access: [bg-s] 2026-10-23 08:53:13.487 (-7h7m58s90ms)
+          Access: [cch-s] 2026-10-23 15:56:32.898 (-4m38s679ms)
+    Package com.google.android.googlesdksetup:
+      CHANGE_WIFI_STATE (allow): 
+          Access: [top-s] 2026-10-23 08:52:37.484 (-7h8m34s93ms)
+    Package com.google.android.apps.nexuslauncher:
+      VIBRATE (allow): 
+          Access: [top-s] 2026-10-23 08:52:23.534 (-7h8m48s43ms) duration=+153ms
+      SYSTEM_ALERT_WINDOW (default): 
+          Access: [top-s] 2026-10-23 08:52:36.437 (-7h8m35s140ms) duration=+895ms
+      RECEIVE_SENSITIVE_NOTIFICATIONS (ignore): 
+          Access: [top-s] 2026-10-23 15:55:51.264 (-5m20s313ms)
+    Package com.android.systemui:
+      READ_CONTACTS (allow): 
+          Access: [pers-s] 2026-10-23 15:56:00.198 (-5m11s379ms)
+      SYSTEM_ALERT_WINDOW (default): 
+          Access: [pers-s] 2026-10-23 15:55:56.381 (-5m15s196ms) duration=+5m36s394ms
+      WAKE_LOCK (allow): 
+          Access: [pers-s] 2026-10-23 15:56:14.789 (-4m56s788ms) duration=+854ms
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+      BLUETOOTH_CONNECT (allow): 
+          Access: [pers-s] 2026-10-23 15:55:40.599 (-5m30s978ms)
+    Package com.android.systemui.accessibility.accessibilitymenu:
+      BIND_ACCESSIBILITY_SERVICE (allow): 
+          Access: [cch-s] 2026-10-23 15:56:32.779 (-4m38s798ms)
+    Package com.google.android.cellbroadcastreceiver:
+      USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER (default): 
+    Package com.google.android.providers.media.module:
+      WRITE_SETTINGS (default): 
+    Package com.android.devicelockcontroller:
+      SYSTEM_ALERT_WINDOW (default): 
+    Package com.scourvex.app:
+      GET_USAGE_STATS (allow): 
+      REQUEST_INSTALL_PACKAGES (allow): 
+      MANAGE_EXTERNAL_STORAGE (allow): 
