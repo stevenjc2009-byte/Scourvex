@@ -62,7 +62,7 @@ fun CleanScreen(vm: MainViewModel, access: Access) {
                     is Junk.Scanning -> ScanOrb("%,d".format(s.count), s.path.ifEmpty { "Starting…" }.takeLast(60), true, null)
                     is Junk.Cleaning -> ScanOrb("${s.done}/${s.total}", "Cleaning…", true, if (s.total > 0) s.done.toFloat() / s.total else null, accent = Neon.Lime)
                     is Junk.Found -> ScanOrb(formatBytes(s.result.items.sumOf { it.size }), "junk · ${"%,d".format(s.result.filesScanned)} files scanned", false, null, accent = Neon.Magenta)
-                    is Junk.Cleaned -> ScanOrb(formatBytes(s.report.freed), "freed · ${s.report.deleted} items removed", false, 1f, accent = Neon.Lime)
+                    is Junk.Cleaned -> ScanOrb(formatBytes(s.report.freed), "freed · ${s.report.deleted} item${if (s.report.deleted == 1) "" else "s"} removed", false, 1f, accent = Neon.Lime)
                 }
             }
         }

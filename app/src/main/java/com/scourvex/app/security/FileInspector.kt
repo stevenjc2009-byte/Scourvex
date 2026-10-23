@@ -28,6 +28,10 @@ class FileInspector(private val pack: SigPack, private val cap: Int = 16 shl 20)
     var bytesRead = 0L
         private set
 
+    /** The scan's job, so a long APK read stops within one buffer when the user taps Stop. */
+    private var job: kotlinx.coroutines.Job? = null
+    private val stopped get() = job?.isActive == false
+
     suspend fun inspect(path: String, size: Long, open: suspend () -> InputStream?): Verdict {
         val ext = extOf(path)
         val wantsHash = pack.wantsHash(size)
@@ -35,6 +39,7 @@ class FileInspector(private val pack: SigPack, private val cap: Int = 16 shl 20)
         val maybeExec = execExt || (ext !in DATA_EXT && size in 4..SNIFF_MAX)
         if (!wantsHash && !maybeExec) return NONE
 
+        job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
         md5.reset(); sha.reset(); sha1?.reset()
         var n = 0
         var total = 0L
@@ -44,6 +49,7 @@ class FileInspector(private val pack: SigPack, private val cap: Int = 16 shl 20)
                 val want = if (n == 0 && !wantsHash && !execExt) 64 else cap - n
                 val r = if (n < cap) inp.read(top, n, want) else inp.read(member, 0, cap)
                 if (r < 0) break
+                if (stopped) return NONE
                 if (n < cap) {
                     md5.update(top, n, r); sha.update(top, n, r); sha1?.update(top, n, r); n += r
                 } else {
@@ -86,6 +92,7 @@ class FileInspector(private val pack: SigPack, private val cap: Int = 16 shl 20)
         runCatching {
             ZipInputStream(inp).use { z ->
                 while (true) {
+                    if (stopped) break
                     val e = z.nextEntry ?: break
                     if (e.isDirectory) continue
                     val dot = e.name.lastIndexOf('.')

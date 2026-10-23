@@ -105,11 +105,15 @@ class MainViewModel : ViewModel() {
 
     val busy: Boolean get() = job?.isActive == true
 
+    /** Name of the scan running now (null when idle), so each screen shows Stop only for its own scan. */
+    val running = MutableStateFlow<String?>(null)
+
     fun cancel() { job?.cancel() }
 
     /** Runs one scan at a time; [what] names it in the notification and in the after-crash notice. */
     private fun run(what: String, block: suspend () -> Unit) {
         if (busy) { toast.value = "Another scan is running"; return }
+        running.value = what
         job = viewModelScope.launch {
             ScanKeeper.begin(what)
             CrashGuard.scanStarted(what)
@@ -120,6 +124,7 @@ class MainViewModel : ViewModel() {
                 ticker.cancel()
                 ScanKeeper.end()
                 CrashGuard.scanEnded()
+                running.value = null
             }
         }
     }

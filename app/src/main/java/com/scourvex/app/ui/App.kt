@@ -70,6 +70,8 @@ class Access(val allFiles: Boolean, val usage: Boolean, val shizuku: Shell.State
 fun ScourvexAppUi(vm: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var settings by rememberSaveable { mutableStateOf(false) }
+    // Back closes Settings, then returns to Home; only Back on Home leaves the app.
+    androidx.activity.compose.BackHandler(enabled = settings || tab != Tab.HOME) { if (settings) settings = false else tab = Tab.HOME }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var resumes by remember { mutableIntStateOf(0) }
     LifecycleResumeEffect(Unit) { Shell.refresh(); resumes++; onPauseOrDispose { } }

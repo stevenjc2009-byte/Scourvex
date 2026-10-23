@@ -8,6 +8,7 @@ import android.os.storage.StorageManager
 import com.scourvex.app.ScourvexApp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -29,7 +30,7 @@ object AppStorage {
         val results = arrayOfNulls<Any>(list.size)
         val next = AtomicInteger()
         val denied = AtomicBoolean(false)
-        repeat(minOf(PARALLEL, list.size)) {
+        List(minOf(PARALLEL, list.size)) {
             launch(Dispatchers.IO) {
                 while (!denied.get()) {
                     val i = next.getAndIncrement()
@@ -45,8 +46,9 @@ object AppStorage {
                     results[i] = transform(a, st)
                 }
             }
-        }
-        // coroutineScope returns after every worker finished, so the array writes are visible here.
+        }.joinAll()
+        // Join first: coroutineScope only waits for its children AFTER this last expression is evaluated,
+        // so reading the array without the join returned whatever few apps had finished (often none).
         if (denied.get()) null else {
             @Suppress("UNCHECKED_CAST")
             results.filterNotNull() as List<T>

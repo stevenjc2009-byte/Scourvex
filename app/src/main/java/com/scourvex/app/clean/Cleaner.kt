@@ -11,27 +11,31 @@ import kotlinx.coroutines.withContext
 
 data class CleanReport(val freed: Long, val deleted: Int, val failed: List<String>, val cacheNote: String?)
 
-/** Deletes junk items. Measures real free space before/after rather than trusting estimates. */
+/**
+ * Deletes junk items. Files count the bytes actually deleted; app caches (cleared by the system, sizes unknown)
+ * count the real free-space change around that one call — a whole-run free-space delta was skewed by other writes.
+ */
 object Cleaner {
 
     suspend fun clean(items: List<JunkItem>, progress: (Int, Int) -> Unit): CleanReport = withContext(Dispatchers.IO) {
-        val before = freeBytes()
+        var freed = 0L
         var deleted = 0
         val failed = ArrayList<String>()
         var cacheNote: String? = null
 
         val appCaches = items.filter { it.path.startsWith("app:") }
         if (appCaches.isNotEmpty()) {
+            val before = freeBytes()
             cacheNote = clearAppCaches()
+            freed += (freeBytes() - before).coerceAtLeast(0)
             if (cacheNote == null) deleted += appCaches.size
         }
         val files = items.filterNot { it.path.startsWith("app:") }
         files.forEachIndexed { i, item ->
             progress(i + 1, files.size)
             val r = Files.delete(item.path)
-            if (r >= 0) deleted++ else failed += item.path
+            if (r >= 0) { deleted++; freed += r } else failed += item.path
         }
-        val freed = (freeBytes() - before).coerceAtLeast(0)
         CleanReport(freed, deleted, failed, cacheNote)
     }
 

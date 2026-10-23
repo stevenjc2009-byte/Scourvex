@@ -84,7 +84,8 @@ object ThreatScanner {
         val workers = workerCount()
         val seen = AtomicInteger(0)
         val total = AtomicInteger(0)     // 0 (unknown) while the walk runs, the listed count after
-        val done = AtomicInteger(0)
+        val done = AtomicInteger(0)      // files AND app packages inspected, so the bar matches the real work left
+        val apks = AtomicInteger(0)
         val inspected = AtomicInteger(0)
         val apkAcc = Perf.Acc("ThreatScanner.apkInspect")
         val inspectAcc = Perf.Acc("ThreatScanner.inspectCalls")
@@ -109,6 +110,10 @@ object ThreatScanner {
                         val app = w.app
                         val t0 = System.nanoTime()
                         val v = runCatching { ins.inspect(w.path, w.size) { Files.open(w.path) } }.getOrNull()
+                        val d = done.incrementAndGet()
+                        val known = total.get()
+                        if (app != null || d % 200 == 0) progress(ThreatProgress(if (known == 0) "Files" else "Inspecting",
+                            w.path, d, known, synchronized(lock) { threats.size }))
                         if (app != null) {
                             apkAcc.add(t0, w.size)
                             if (v == null) continue
@@ -123,8 +128,6 @@ object ThreatScanner {
                             if (v.detections.isNotEmpty()) synchronized(lock) {
                                 v.detections.forEach { threats += Threat(w.path, false, w.name, it, source(it), w.size) }
                             }
-                            val d = done.incrementAndGet()
-                            if (d % 200 == 0) progress(ThreatProgress("Files", w.path, d, total.get(), synchronized(lock) { threats.size }))
                         }
                     }
                     synchronized(lock) { bytes += ins.bytesRead }
@@ -159,6 +162,7 @@ object ThreatScanner {
                     if (!system) {
                         for (apk in listOfNotNull(app.sourceDir) + (app.splitSourceDirs ?: emptyArray())) {
                             if (!SkipGuard.allows(apk)) continue   // skip list wins even for installed APKs
+                            apks.incrementAndGet()
                             queue.trySend(Work(apk, File(apk).length(), apk.substringAfterLast('/'), app))
                         }
                     }
@@ -171,11 +175,11 @@ object ThreatScanner {
             privileged = Perf.time("ThreatScanner.listing", { "files=${seen.get()}" }) {
                 Files.walkAll { e -> if (!e.isDir) { seen.incrementAndGet(); queue.trySend(Work(e.path, e.size, e.name, null)) } }
             }
-            total.set(seen.get())
             appsJob.join()
+            total.set(seen.get() + apks.get())
             queue.close()
             // The walk is done but the workers are still inspecting what it queued: say so, not "Device".
-            progress(ThreatProgress("Files", "Inspecting files and app packages…", done.get(), total.get(), synchronized(lock) { threats.size }))
+            progress(ThreatProgress("Inspecting", "files and app packages…", done.get(), total.get(), synchronized(lock) { threats.size }))
             pool.joinAll()
             progress(ThreatProgress("Device", "Checking settings and spyware traces…", 0, 0, synchronized(lock) { threats.size }))
             Perf.log("ThreatScanner.inspect", (System.nanoTime() - t0All) / 1_000_000,

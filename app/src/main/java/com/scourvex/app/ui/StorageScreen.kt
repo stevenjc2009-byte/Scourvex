@@ -53,6 +53,8 @@ fun StorageScreen(vm: MainViewModel, access: Access) {
     val ctx = LocalContext.current
     val state by vm.store.collectAsStateWithLifecycle()
     val dupes by vm.dupes.collectAsStateWithLifecycle()
+    val running by vm.running.collectAsStateWithLifecycle()
+    val mine = running == MainViewModel.STORAGE || running == MainViewModel.DUPES || running == MainViewModel.DELETING
     var view by rememberSaveable { mutableStateOf(View.TYPES) }
     // Duplicates: every copy except the one to keep is pre-ticked.
     val ticked = remember(state, dupes) {
@@ -74,8 +76,8 @@ fun StorageScreen(vm: MainViewModel, access: Access) {
                 }
             }
             (state as? Store.Scanning)?.let { s -> ScanBar("Measuring files · ${"%,d".format(s.count)} so far", null, accent = Neon.Amber); Gap(10) }
-            if (vm.busy) GhostButton("Stop", Modifier.fillMaxWidth(), Neon.Red) { vm.cancel() }
-            else NeonButton(if (state is Store.Done) "Rescan" else "Analyse storage", Modifier.fillMaxWidth()) { vm.scanStorage() }
+            if (mine) GhostButton("Stop", Modifier.fillMaxWidth(), Neon.Red) { vm.cancel() }
+            else NeonButton(if (state is Store.Done) "Rescan" else "Analyse storage", Modifier.fillMaxWidth(), enabled = running == null) { vm.scanStorage() }
             Gap(14)
         }
         if (!access.allFiles) item { Banner("Grant all-files access first", Neon.Red, "Grant") { Perms.openAllFiles(ctx) }; Gap() }
@@ -117,7 +119,7 @@ fun StorageScreen(vm: MainViewModel, access: Access) {
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(formatBytes(f.size), color = Neon.Amber, style = MaterialTheme.typography.labelLarge)
-                        Text("%,d files".format(f.files), color = Neon.Dim, style = MaterialTheme.typography.labelSmall)
+                        Text(if (f.files == 1) "1 file" else "%,d files".format(f.files), color = Neon.Dim, style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
