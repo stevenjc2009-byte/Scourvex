@@ -1,0 +1,37 @@
+name: Release
+
+# Push a tag like v1.0.1 -> signed APK attached to a GitHub release.
+# The in-app updater reads releases/latest and installs that APK.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - name: Decode keystore
+        run: echo "${{ secrets.SCOURVEX_KEYSTORE_B64 }}" | base64 -d > release.jks
+      - name: Test and build
+        env:
+          SCOURVEX_STOREFILE: release.jks
+          SCOURVEX_STOREPASSWORD: ${{ secrets.SCOURVEX_STOREPASSWORD }}
+          SCOURVEX_KEYALIAS: ${{ secrets.SCOURVEX_KEYALIAS }}
+          SCOURVEX_KEYPASSWORD: ${{ secrets.SCOURVEX_KEYPASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --console=plain
+          cp app/build/outputs/apk/release/app-release.apk "Scourvex-${GITHUB_REF_NAME}.apk"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "Scourvex-${GITHUB_REF_NAME}.apk" --title "Scourvex $GITHUB_REF_NAME" --generate-notes --latest

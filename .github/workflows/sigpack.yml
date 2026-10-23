@@ -1,0 +1,45 @@
+name: Signature pack
+
+# Daily: fresh ClamAV databases -> sigpack.zip on the "sigpack" prerelease.
+# The app downloads releases/download/sigpack/sigpack.zip.
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download ClamAV databases
+        run: |
+          mkdir -p db
+          ok=1
+          for f in main.cvd daily.cvd; do
+            curl -fsSL -A "ClamAV/1.4.3 (OS: linux-gnu, ARCH: x86_64, CPU: x86_64)" -o "db/$f" "https://database.clamav.net/$f" || ok=0
+          done
+          if [ "$ok" = 0 ]; then
+            echo "Direct download refused; falling back to freshclam in the official image"
+            rm -f db/*
+            docker run --rm -u 0 -v "$PWD/db:/var/lib/clamav" clamav/clamav:stable freshclam --stdout --foreground
+          fi
+          ls -la db
+      - name: Build pack
+        env:
+          MB_AUTH_KEY: ${{ secrets.MB_AUTH_KEY }}
+        run: |
+          if [ -n "$MB_AUTH_KEY" ]; then
+            python3 tools/build_sigpack.py db sigpack.zip --mbz-key "$MB_AUTH_KEY"
+          else
+            python3 tools/build_sigpack.py db sigpack.zip
+          fi
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view sigpack >/dev/null 2>&1 || gh release create sigpack --prerelease --latest=false --title "Signature pack" --notes "Rebuilt daily from ClamAV (GPL-2.0) and stalkerware-indicators (CC BY 4.0). Not an app release."
+          gh release upload sigpack sigpack.zip --clobber
