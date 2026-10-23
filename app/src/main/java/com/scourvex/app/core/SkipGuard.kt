@@ -6,6 +6,46 @@ package com.scourvex.app.core
  */
 class SkipSet private constructor(val raw: List<String>, private val keys: List<String>) {
 
+    /** [raw] as an array, built once (handed to the Shizuku service on every restricted open). */
+    val rawArray: Array<String> by lazy(LazyThreadSafetyMode.PUBLICATION) { raw.toTypedArray() }
+
+    /** Answers "is this child of one directory skipped?" without normalising a full path per entry. */
+    inner class ChildFilter internal constructor(
+        private val names: Set<String>, private val lower: Boolean, private val all: Boolean, private val full: Boolean,
+    ) {
+        /** [path] is the child's full path (= directory + "/" + [name]); only read on the rare slow cases. */
+        fun skips(path: String, name: String): Boolean {
+            if (all) return true
+            if (full || name.last().isWhitespace()) return isSkipped(path)   // aliases / trimmed names: full normalisation
+            if (names.isEmpty()) return false
+            return names.contains(if (lower) name.lowercase(java.util.Locale.ROOT) else name)
+        }
+    }
+
+    /**
+     * Prepared once per directory. Valid for the children of [dirPath]: a child is skipped exactly when a skip
+     * key equals the child's own key (the directory itself is not skipped, so no key is an ancestor of it).
+     * If [dirPath] is itself skipped, every child is. Same answer as [isSkipped] on each full child path.
+     */
+    fun childFilter(dirPath: String): ChildFilter {
+        if (keys.isEmpty()) return noChildren
+        if (isSkipped(dirPath)) return ChildFilter(emptySet(), false, all = true, full = false)
+        val dk = key(dirPath)
+        val pre = if (dk.endsWith("/")) dk else "$dk/"
+        // A storage alias (/storage/self/primary ...) can live below this folder: let full normalisation decide.
+        if (ALIASES.any { it.startsWith(pre) }) return ChildFilter(emptySet(), false, all = false, full = true)
+        var names: HashSet<String>? = null
+        for (k in keys) {
+            if (k.length > pre.length && k.startsWith(pre) && k.indexOf('/', pre.length) < 0) {
+                (names ?: HashSet<String>().also { names = it }).add(k.substring(pre.length))
+            }
+        }
+        val n = names ?: return noChildren
+        return ChildFilter(n, dk.startsWith("/storage/") || dk == "/storage", all = false, full = false)
+    }
+
+    private val noChildren = ChildFilter(emptySet(), false, all = false, full = false)
+
     /** [path] is a skip entry or lies inside one. */
     fun isSkipped(path: String): Boolean {
         if (keys.isEmpty()) return false

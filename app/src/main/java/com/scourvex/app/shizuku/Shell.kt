@@ -10,6 +10,8 @@ import com.scourvex.app.IShellService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import rikka.shizuku.Shizuku
 
@@ -71,21 +73,38 @@ object Shell {
 
     val ready: Boolean get() = state.value == State.READY
 
-    /** Binds the shell service if needed. Returns null when Shizuku is unavailable. */
+    private val bindLock = Mutex()
+
+    /**
+     * The bound shell service, binding it first if needed. Null when Shizuku is unavailable.
+     * Once bound it is returned as is, with no Shizuku or binder ping per call: the dead-binder
+     * listeners clear it, and callers that hit a [android.os.DeadObjectException] call [invalidate].
+     */
     suspend fun get(): IShellService? {
-        refresh()
-        if (!ready) return null
-        service?.let { if (it.asBinder().pingBinder()) return it }
-        val d = CompletableDeferred<IShellService>()
-        pending = d
-        Shizuku.bindUserService(args, connection)
-        return withTimeoutOrNull(10_000) { d.await() }
+        service?.let { return it }
+        return bindLock.withLock {
+            service?.let { return@withLock it }
+            refresh()
+            if (!ready) return@withLock null
+            val d = CompletableDeferred<IShellService>()
+            pending = d
+            Shizuku.bindUserService(args, connection)
+            withTimeoutOrNull(10_000) { d.await() }
+        }
     }
+
+    /** Forget the bound service (its process died); the next [get] rebinds. */
+    fun invalidate() { service = null }
 
     /** Runs a shell command as uid 2000. Returns (exitCode, output) or null without Shizuku. */
     suspend fun exec(cmd: String): Pair<Int, String>? {
         val s = get() ?: return null
-        val raw = s.exec(cmd)
+        val raw = try {
+            s.exec(cmd)
+        } catch (_: android.os.DeadObjectException) {
+            invalidate()
+            (get() ?: return null).exec(cmd)
+        }
         val nl = raw.indexOf('\n')
         return raw.substring(0, nl).toInt() to raw.substring(nl + 1)
     }
@@ -93,7 +112,12 @@ object Shell {
     suspend fun walkPipe(root: String, skip: List<String>): ParcelFileDescriptor? {
         val s = get() ?: return null
         val (read, write) = ParcelFileDescriptor.createPipe()
-        s.walk(root, skip.toTypedArray(), write)
+        try {
+            s.walk(root, skip.toTypedArray(), write)
+        } catch (_: android.os.DeadObjectException) {
+            invalidate()
+            (get() ?: run { write.close(); read.close(); return null }).walk(root, skip.toTypedArray(), write)
+        }
         write.close()
         return read
     }

@@ -32,6 +32,9 @@ class SigPack private constructor(
     val md5Count: Int get() = sizes.size
     val shaCount: Int get() = sha.values.sumOf { it.size }
 
+    /** The pack holds SHA-1 (40 hex) signatures, so the inspector must compute a SHA-1 too. */
+    val hasSha1: Boolean = sha.keys.any { it.length == 40 }
+
     /** True if a size-specific hash signature has exactly this file size. (Size-less hashes are
      *  only checked for files the scanner hashes anyway: executables and archives.) */
     fun wantsHash(size: Long): Boolean = size == EICAR_SIZE || (size in 0..0xFFFF_FFFFL && lowerBound(size.toInt()) < sizes.size &&
@@ -121,7 +124,9 @@ class SigPack private constructor(
             }
             val fp = lines("fp.txt").filter { it.isNotBlank() }.toHashSet()
 
-            val (body, skipped) = BodySigs.parse(lines("body.txt"))
+            val (body, skipped) = z.getEntry("body.txt")?.let { e ->
+                z.getInputStream(e).bufferedReader().useLines { BodySigs.parse(it) }
+            } ?: BodySigs.parse(emptySequence())
 
             val pkgs = HashMap<String, String>()
             val certs = HashMap<String, String>()

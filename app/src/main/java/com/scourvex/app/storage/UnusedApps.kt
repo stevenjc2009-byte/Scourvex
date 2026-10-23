@@ -37,9 +37,16 @@ object UnusedApps {
         // Android keeps yearly buckets for about two years, so this reaches back as far as records go.
         val usage = usm.queryAndAggregateUsageStats(now - 730 * DAY, now)
         val cutoff = now - DAYS * DAY
+        // Two bulk queries replace a launch-intent lookup and a package-info call per app. An app counts as
+        // launchable exactly when getLaunchIntentForPackage would find one: an INFO or a LAUNCHER main activity.
+        val launchable = HashSet<String>()
+        for (cat in listOf(Intent.CATEGORY_INFO, Intent.CATEGORY_LAUNCHER)) {
+            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(cat), 0).forEach { launchable += it.activityInfo.packageName }
+        }
+        val infos = pm.getInstalledPackages(0).associateBy { it.packageName }
         return sizes.mapNotNull { s ->
-            if (s.pkg == ctx.packageName || pm.getLaunchIntentForPackage(s.pkg) == null) return@mapNotNull null
-            val info = runCatching { pm.getPackageInfo(s.pkg, 0) }.getOrNull() ?: return@mapNotNull null
+            if (s.pkg == ctx.packageName || s.pkg !in launchable) return@mapNotNull null
+            val info = infos[s.pkg] ?: return@mapNotNull null
             val app = info.applicationInfo ?: return@mapNotNull null
             if (app.flags and ApplicationInfo.FLAG_SYSTEM != 0 || info.firstInstallTime > cutoff) return@mapNotNull null
             val u = usage[s.pkg]

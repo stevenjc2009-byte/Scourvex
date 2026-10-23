@@ -1,5 +1,6 @@
 package com.scourvex.app.security
 
+import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.security.MessageDigest
@@ -17,19 +18,24 @@ class FileInspector(private val pack: SigPack, private val cap: Int = 16 shl 20)
     private val top = ByteArray(cap)
     private val member = ByteArray(cap)
     private val nested by lazy { ByteArray(cap) }
+    // Digests and the skip buffer live as long as the inspector: nothing is allocated per file or per zip member.
+    private val md5 = MessageDigest.getInstance("MD5")
+    private val sha = MessageDigest.getInstance("SHA-256")
+    private val sha1: MessageDigest? = if (pack.hasSha1) MessageDigest.getInstance("SHA-1") else null
+    private val memberMd5 = MessageDigest.getInstance("MD5")
+    private val skip = ByteArray(32 * 1024)
 
     var bytesRead = 0L
         private set
 
     suspend fun inspect(path: String, size: Long, open: suspend () -> InputStream?): Verdict {
-        val ext = path.substringAfterLast('/').substringAfterLast('.', "").lowercase()
+        val ext = extOf(path)
         val wantsHash = pack.wantsHash(size)
         val execExt = ext in EXEC_EXT
         val maybeExec = execExt || (ext !in DATA_EXT && size in 4..SNIFF_MAX)
         if (!wantsHash && !maybeExec) return NONE
 
-        val md5 = MessageDigest.getInstance("MD5")
-        val sha = MessageDigest.getInstance("SHA-256")
+        md5.reset(); sha.reset(); sha1?.reset()
         var n = 0
         var total = 0L
         (open() ?: return NONE).use { inp ->
@@ -39,9 +45,9 @@ class FileInspector(private val pack: SigPack, private val cap: Int = 16 shl 20)
                 val r = if (n < cap) inp.read(top, n, want) else inp.read(member, 0, cap)
                 if (r < 0) break
                 if (n < cap) {
-                    md5.update(top, n, r); sha.update(top, n, r); n += r
+                    md5.update(top, n, r); sha.update(top, n, r); sha1?.update(top, n, r); n += r
                 } else {
-                    md5.update(member, 0, r); sha.update(member, 0, r)
+                    md5.update(member, 0, r); sha.update(member, 0, r); sha1?.update(member, 0, r)
                 }
                 total += r
                 // Not an executable after all and no hash needed: stop early.
@@ -55,17 +61,20 @@ class FileInspector(private val pack: SigPack, private val cap: Int = 16 shl 20)
         val md5b = md5.digest()
         val md5hex = hex(md5b)
         val shahex = hex(sha.digest())
-        if (pack.isFalsePositive(md5hex, total) || pack.isFalsePositive(shahex, total)) return Verdict(emptyList(), shahex, true)
+        val sha1hex = sha1?.let { hex(it.digest()) }
+        if (pack.isFalsePositive(md5hex, total) || pack.isFalsePositive(shahex, total) ||
+            (sha1hex != null && pack.isFalsePositive(sha1hex, total))) return Verdict(emptyList(), shahex, true)
 
         val found = LinkedHashSet<String>()
         pack.md5(total, md5b)?.let { found += it }
         pack.hash(shahex, total)?.let { found += it }
         pack.hash(md5hex, total)?.let { found += it }
+        if (sha1hex != null) pack.hash(sha1hex, total)?.let { found += it }
 
         when {
             kind == Kind.ZIP -> {
-                val src = if (total <= cap) ByteArrayInputStream(top, 0, n) else open()
-                src?.use { scanZip(it, depth = 1, found) }
+                if (total <= cap) ByteArrayInputStream(top, 0, n).use { scanZip(it, depth = 1, found) }
+                else open()?.use { scanZip(BufferedInputStream(it, 256 shl 10), depth = 1, found) }
             }
             kind != Kind.OTHER || execExt -> found += pack.body.match(top, n, inZip = false)
         }
@@ -79,12 +88,13 @@ class FileInspector(private val pack: SigPack, private val cap: Int = 16 shl 20)
                 while (true) {
                     val e = z.nextEntry ?: break
                     if (e.isDirectory) continue
-                    val ext = e.name.substringAfterLast('.', "").lowercase()
+                    val dot = e.name.lastIndexOf('.')
+                    val ext = if (dot < 0) "" else e.name.substring(dot + 1).lowercase()
                     if (ext in MEDIA_EXT) continue
                     var n = 0
                     var total = 0L
-                    val md5 = MessageDigest.getInstance("MD5")
-                    val skip = ByteArray(8192)
+                    val md5 = memberMd5
+                    md5.reset()
                     while (true) {
                         val r = if (n < cap) z.read(buf, n, cap - n) else z.read(skip)
                         if (r < 0) break
@@ -101,6 +111,11 @@ class FileInspector(private val pack: SigPack, private val cap: Int = 16 shl 20)
                 }
             }
         }
+    }
+
+    private fun extOf(path: String): String {
+        val dot = path.lastIndexOf('.')
+        return if (dot <= path.lastIndexOf('/')) "" else path.substring(dot + 1).lowercase()
     }
 
     enum class Kind { ZIP, DEX, ELF, SCRIPT, OTHER }

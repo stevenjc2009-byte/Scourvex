@@ -69,15 +69,48 @@ class HexPattern private constructor(val segments: List<List<Item>>, val starMin
         return true
     }
 
+    /** Leading literal bytes of each segment (up to 8): a cheap test that rules out most start positions. */
+    private val prefixes: Array<ByteArray> = Array(segments.size) { si ->
+        val out = ArrayList<Byte>()
+        for (it in segments[si]) {
+            if (it is B && it.mask == 0xFF && out.size < 8) out.add(it.value.toByte()) else break
+        }
+        out.toByteArray()
+    }
+
     /** Earliest start >= [from] where segment [s] matches; returns (start, end) or null. */
     fun findSegment(buf: ByteArray, len: Int, s: Int, from: Int): IntArray? {
+        val pre = prefixes[s]
         var p = from
+        if (pre.isNotEmpty()) {
+            val last = len - pre.size
+            val b0 = pre[0]
+            while (p <= last) {
+                var c = buf[p]
+                if (caseless) c = fold(c.toInt() and 0xFF).toByte()
+                if (c == b0 && prefixAt(buf, p, pre)) {
+                    val e = matchSegmentAt(buf, len, s, p)
+                    if (e >= 0) return intArrayOf(p, e)
+                }
+                p++
+            }
+            return null
+        }
         while (p < len) {
             val e = matchSegmentAt(buf, len, s, p)
             if (e >= 0) return intArrayOf(p, e)
             p++
         }
         return null
+    }
+
+    private fun prefixAt(buf: ByteArray, p: Int, pre: ByteArray): Boolean {
+        for (k in 1 until pre.size) {
+            var c = buf[p + k]
+            if (caseless) c = fold(c.toInt() and 0xFF).toByte()
+            if (c != pre[k]) return false
+        }
+        return true
     }
 
     /** Full match given that segment [s] matched at [start]..[end]. */

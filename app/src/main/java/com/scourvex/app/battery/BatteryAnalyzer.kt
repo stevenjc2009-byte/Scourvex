@@ -6,6 +6,8 @@ import com.scourvex.app.ScourvexApp
 import com.scourvex.app.clean.JunkScanner
 import com.scourvex.app.core.Perf
 import com.scourvex.app.shizuku.Shell
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 data class PowerUse(
     val label: String,
@@ -29,7 +31,12 @@ object BatteryAnalyzer {
         return Perf.time("BatteryAnalyzer.scan", { "rows=$n" }) { scanTimed().also { n = it.apps.size } }
     }
 
-    private suspend fun scanTimed(): BatteryReport {
+    private val headRe = Regex("""^\s+UID (\S+): ([0-9.eE-]+)""")
+    private val compRe = Regex("""(?<![\w:])(\w+)=([0-9.eE-]+)""")   // skips "sensors:bg=" foreground/background splits
+    private val userAppRe = Regex("""u(\d+)a(\d+)""")
+    private val userSharedRe = Regex("""u(\d+)s(\d+)""")
+
+    private suspend fun scanTimed(): BatteryReport = withContext(Dispatchers.IO) {
         val ctx = ScourvexApp.instance
         // Only the power section: the full dump can be megabytes, over the shell service's output cap.
         val out = Perf.time("BatteryAnalyzer.dumpsys") { Shell.exec("dumpsys batterystats 2>/dev/null | awk '/Estimated power use/{f=1} f&&/^  [^ U]/&&!/Estimated/{exit} f'") }
@@ -46,9 +53,9 @@ object BatteryAnalyzer {
                 }
                 PowerUse(label, pkg, u.mAh, 0, u.parts)
             }
-            if (rows.isNotEmpty()) return BatteryReport(rows, "Android battery stats since last full charge (via Shizuku)")
+            if (rows.isNotEmpty()) return@withContext BatteryReport(rows, "Android battery stats since last full charge (via Shizuku)")
         }
-        return BatteryReport(usageFallback(ctx), "Screen-on time, last 24 h (start Shizuku for real power numbers)")
+        BatteryReport(usageFallback(ctx), "Screen-on time, last 24 h (start Shizuku for real power numbers)")
     }
 
     data class UidPower(val uid: Int, val mAh: Double, val parts: String)
@@ -58,8 +65,8 @@ object BatteryAnalyzer {
         val lines = text.lines()
         val start = lines.indexOfFirst { it.trim().startsWith("Estimated power use") }
         if (start < 0) return emptyList()
-        val head = Regex("""^\s+UID (\S+): ([0-9.eE-]+)""")
-        val comp = Regex("""(?<![\w:])(\w+)=([0-9.eE-]+)""")   // skips "sensors:bg=" foreground/background splits
+        val head = headRe
+        val comp = compRe
         val out = ArrayList<UidPower>()
         var i = start + 1
         while (i < lines.size) {
@@ -89,7 +96,7 @@ object BatteryAnalyzer {
     /** "u0a155" -> 10155, "u10a3" -> 1010003, "1000" -> 1000. */
     fun uidOf(s: String): Int? {
         s.toIntOrNull()?.let { return it }
-        val m = Regex("""u(\d+)a(\d+)""").matchEntire(s) ?: return Regex("""u(\d+)s(\d+)""").matchEntire(s)?.let {
+        val m = userAppRe.matchEntire(s) ?: return userSharedRe.matchEntire(s)?.let {
             it.groupValues[1].toInt() * 100_000 + it.groupValues[2].toInt()
         }
         return m.groupValues[1].toInt() * 100_000 + 10_000 + m.groupValues[2].toInt()

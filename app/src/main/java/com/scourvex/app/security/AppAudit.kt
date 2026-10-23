@@ -40,7 +40,7 @@ class AppAudit(private val ctx: Context) {
         (Settings.Secure.getString(ctx.contentResolver, key) ?: "").split(':')
             .mapNotNull { it.substringBefore('/').takeIf { p -> p.isNotBlank() } }.toSet()
 
-    fun audit(info: PackageInfo, label: String): AppRisk? {
+    fun audit(info: PackageInfo, label: () -> String): AppRisk? {
         val app = info.applicationInfo ?: return null
         val system = app.flags and ApplicationInfo.FLAG_SYSTEM != 0
         if (system && app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP == 0) return null
@@ -76,7 +76,7 @@ class AppAudit(private val ctx: Context) {
         if (Manifest.permission.REQUEST_INSTALL_PACKAGES in requested && sideloaded) add(1, "Can install other apps")
         if (app.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) add(1, "Debug build")
 
-        return if (score >= THRESHOLD) AppRisk(pkg, label, score, why, installer) else null
+        return if (score >= THRESHOLD) AppRisk(pkg, label(), score, why, installer) else null
     }
 
     companion object {

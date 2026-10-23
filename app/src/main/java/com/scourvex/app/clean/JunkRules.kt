@@ -87,7 +87,7 @@ object JunkRules {
         if (lower.startsWith(".trashed-")) return JunkCategory.RECYCLE_BINS
         if (lower.startsWith(".thumbdata")) return JunkCategory.THUMBNAILS
         if (lower in litterNames || (name.startsWith("._") && name.length > 2)) return JunkCategory.OS_LITTER
-        if (lower in logNames || logExt.any { lower.endsWith(it) } || Regex("""\.log\.\d+$""").containsMatchIn(lower)) {
+        if (lower in logNames || logExt.any { lower.endsWith(it) } || numberedLog.containsMatchIn(lower)) {
             return JunkCategory.LOGS
         }
         if (tempExt.any { lower.endsWith(it) } && lower.length > 4) return JunkCategory.TEMP
@@ -96,4 +96,5 @@ object JunkRules {
     }
 
     private val appAreas = setOf("data", "media", "obb")
+    private val numberedLog = Regex("""\.log\.\d+$""")
 }

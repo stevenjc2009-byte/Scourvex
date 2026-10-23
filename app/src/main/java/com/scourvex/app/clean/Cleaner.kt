@@ -6,13 +6,15 @@ import com.scourvex.app.ScourvexApp
 import com.scourvex.app.core.Files
 import com.scourvex.app.core.SkipGuard
 import com.scourvex.app.shizuku.Shell
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 data class CleanReport(val freed: Long, val deleted: Int, val failed: List<String>, val cacheNote: String?)
 
 /** Deletes junk items. Measures real free space before/after rather than trusting estimates. */
 object Cleaner {
 
-    suspend fun clean(items: List<JunkItem>, progress: (Int, Int) -> Unit): CleanReport {
+    suspend fun clean(items: List<JunkItem>, progress: (Int, Int) -> Unit): CleanReport = withContext(Dispatchers.IO) {
         val before = freeBytes()
         var deleted = 0
         val failed = ArrayList<String>()
@@ -30,7 +32,7 @@ object Cleaner {
             if (r >= 0) deleted++ else failed += item.path
         }
         val freed = (freeBytes() - before).coerceAtLeast(0)
-        return CleanReport(freed, deleted, failed, cacheNote)
+        CleanReport(freed, deleted, failed, cacheNote)
     }
 
     /**

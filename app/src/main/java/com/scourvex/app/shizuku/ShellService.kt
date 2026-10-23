@@ -6,6 +6,8 @@ import com.scourvex.app.core.GuardedDelete
 import com.scourvex.app.core.SkipSet
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.file.LinkOption
+import java.nio.file.attribute.BasicFileAttributes
 import kotlin.system.exitProcess
 
 /**
@@ -36,7 +38,7 @@ class ShellService : IShellService.Stub() {
 
     override fun walk(root: String, skip: Array<String>, sink: ParcelFileDescriptor) {
         Thread {
-            FileOutputStream(sink.fileDescriptor).bufferedWriter().use { w ->
+            FileOutputStream(sink.fileDescriptor).writer(Charsets.UTF_8).buffered(64 * 1024).use { w ->
                 try {
                     walkInto(File(root), SkipSet.of(skip.toList()), w)
                 } catch (_: Throwable) {
@@ -49,31 +51,45 @@ class ShellService : IShellService.Stub() {
 
     private fun walkInto(dir: File, skip: SkipSet, w: java.io.Writer) {
         if (!skip.allows(dir.path)) return
-        val stack = ArrayDeque<File>().apply { add(dir) }
+        val stack = ArrayDeque<String>().apply { add(dir.path) }
         while (stack.isNotEmpty()) {
-            val d = stack.removeLast()
-            val children = d.listFiles()
-            if (children == null) { w.write("0\t0\tu\t${d.path}\n"); continue }
-            for (f in children) {
-                val path = f.path
+            val dp = stack.removeLast()
+            val names = File(dp).list()
+            if (names == null) { w.write("0\t0\tu\t$dp\n"); continue }
+            val filter = skip.childFilter(dp)
+            val pre = if (dp.endsWith("/")) dp else "$dp/"
+            for (name in names) {
+                val path = pre + name
                 // Name check before any stat: a skipped child is never probed.
-                if (skip.isSkipped(path)) continue
-                // Do not follow symlinks: they can loop or escape the tree.
-                if (java.nio.file.Files.isSymbolicLink(f.toPath())) continue
-                if (f.isDirectory) {
-                    w.write("0\t${f.lastModified()}\td\t$path\n")
-                    stack.add(f)
+                if (filter.skips(path, name)) continue
+                // One lstat per entry (never follows links: they can loop or escape the tree).
+                val a = try {
+                    java.nio.file.Files.readAttributes(java.nio.file.Paths.get(path), BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+                } catch (_: java.io.IOException) { continue }
+                if (a.isSymbolicLink) continue
+                val mtime = a.lastModifiedTime().toMillis()
+                if (a.isDirectory) {
+                    w.write("0\t$mtime\td\t$path\n")
+                    stack.add(path)
                 } else {
-                    w.write("${f.length()}\t${f.lastModified()}\tf\t$path\n")
+                    w.write("${a.size()}\t$mtime\tf\t$path\n")
                 }
             }
         }
     }
 
     override fun open(path: String, skip: Array<String>): ParcelFileDescriptor {
-        if (!SkipSet.of(skip.toList()).allows(path)) throw SecurityException("skipped")
+        if (!skipSet(skip).allows(path)) throw SecurityException("skipped")
         if (java.nio.file.Files.isSymbolicLink(java.nio.file.Paths.get(path))) throw SecurityException("symlink")
         return ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)
+    }
+
+    // The app hands over the same skip list on every open(): normalise it once, not once per file.
+    @Volatile private var lastSkip: Pair<Array<String>, SkipSet>? = null
+
+    private fun skipSet(skip: Array<String>): SkipSet {
+        lastSkip?.let { if (it.first.contentEquals(skip)) return it.second }
+        return SkipSet.of(skip.toList()).also { lastSkip = skip to it }
     }
 
     override fun delete(path: String, skip: Array<String>): Long {

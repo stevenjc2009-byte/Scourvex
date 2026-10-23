@@ -31,6 +31,9 @@ object DeviceAudit {
 
     suspend fun run(ctx: Context): List<DeviceFinding> {
         val out = ArrayList<DeviceFinding>()
+        val fetched = prefetch()
+        fun g(key: String) = fetched["global:$key"]
+        fun sec(key: String) = fetched["secure:$key"]
         val H = DeviceFinding.Level.HIGH
         val M = DeviceFinding.Level.MEDIUM
         val I = DeviceFinding.Level.INFO
@@ -38,23 +41,23 @@ object DeviceAudit {
         if (!ctx.getSystemService(KeyguardManager::class.java).isDeviceSecure)
             out += DeviceFinding("No screen lock", "Anyone who picks up the phone can open it and every app on it.", H, Settings.ACTION_SECURITY_SETTINGS)
         // The Play Protect switch writes package_verifier_user_consent=-1 (checked on Android 16); older builds used package_verifier_enable=0.
-        if (global("package_verifier_user_consent") == "-1" || global("package_verifier_enable") == "0")
+        if (g("package_verifier_user_consent") == "-1" || g("package_verifier_enable") == "0")
             out += DeviceFinding("Play Protect app scanning is off", "Google no longer checks installed apps for harmful behaviour.", H, Settings.ACTION_SECURITY_SETTINGS)
-        if (global("verifier_verify_adb_installs") == "0")
+        if (g("verifier_verify_adb_installs") == "0")
             out += DeviceFinding("Apps installed over USB are not checked", "\"Verify apps over USB\" is off in Developer options.", M, DEV)
-        if (global(Settings.Global.ADB_ENABLED) == "1")
+        if (g(Settings.Global.ADB_ENABLED) == "1")
             out += DeviceFinding("USB debugging is on", "A computer you plug into can install apps and read data once you accept its key.", M, DEV)
-        if (global("adb_wifi_enabled") == "1")
+        if (g("adb_wifi_enabled") == "1")
             out += DeviceFinding("Wireless debugging is on", "Shizuku needs it to start; turn it off when you are not starting Shizuku.", I, DEV)
-        if (global(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED) == "1")
+        if (g(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED) == "1")
             out += DeviceFinding("Developer options are on", "Fine if you use Shizuku; otherwise turn them off.", I, DEV)
 
         try {
             val cm = ctx.getSystemService(ConnectivityManager::class.java)
-            val proxy = cm.defaultProxy?.let { "${it.host}:${it.port}" } ?: global(Settings.Global.HTTP_PROXY)?.takeIf { it.isNotBlank() && it != ":0" }
+            val proxy = cm.defaultProxy?.let { "${it.host}:${it.port}" } ?: g(Settings.Global.HTTP_PROXY)?.takeIf { it.isNotBlank() && it != ":0" }
             if (proxy != null)
                 out += DeviceFinding("Network proxy set: $proxy", "Web traffic goes through this server. Remove it unless you set it up.", H, Settings.ACTION_WIRELESS_SETTINGS)
-            val vpnApp = secure("always_on_vpn_app")?.takeIf { it.isNotBlank() }
+            val vpnApp = sec("always_on_vpn_app")?.takeIf { it.isNotBlank() }
             val vpnOn = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
             if (vpnApp != null || vpnOn)
                 out += DeviceFinding("VPN active" + (vpnApp?.let { ": " + appName(ctx, it) + " (always on)" } ?: ""),
@@ -107,17 +110,38 @@ object DeviceAudit {
         JunkScanner.appLabel(ctx.packageManager.getApplicationInfo(pkg, 0), pkg)
     }.getOrDefault(pkg)
 
-    // Hidden keys can throw SecurityException for apps; the shell user may read them.
-    private suspend fun global(key: String) = read("global", key) { Settings.Global.getString(it, key) }
-    private suspend fun secure(key: String) = read("secure", key) { Settings.Secure.getString(it, key) }
+    private val KEYS = listOf(
+        "global" to "package_verifier_user_consent", "global" to "package_verifier_enable",
+        "global" to "verifier_verify_adb_installs", "global" to Settings.Global.ADB_ENABLED,
+        "global" to "adb_wifi_enabled", "global" to Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
+        "global" to Settings.Global.HTTP_PROXY, "secure" to "always_on_vpn_app",
+    )
 
-    private suspend fun read(table: String, key: String, get: (android.content.ContentResolver) -> String?): String? {
+    /**
+     * Reads every setting the audit looks at once. Hidden keys can throw SecurityException for apps; those
+     * are fetched together with a single shell call (the shell user may read them) instead of one exec each.
+     */
+    private suspend fun prefetch(): Map<String, String?> {
         val cr = com.scourvex.app.ScourvexApp.instance.contentResolver
-        return try {
-            get(cr)
-        } catch (_: SecurityException) {
-            if (!Shell.ready) null
-            else Shell.exec("settings get $table $key")?.second?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
+        val out = HashMap<String, String?>()
+        val denied = ArrayList<Pair<String, String>>()
+        for ((table, key) in KEYS) {
+            try {
+                out["$table:$key"] = if (table == "global") Settings.Global.getString(cr, key) else Settings.Secure.getString(cr, key)
+            } catch (_: SecurityException) {
+                denied += table to key
+            }
         }
+        if (denied.isNotEmpty() && Shell.ready) {
+            val script = denied.joinToString("; ") { (t, k) -> "echo \"$t:$k=\$(settings get $t $k)\"" }
+            val text = Shell.exec(script)?.second.orEmpty()
+            for (ln in text.lineSequence()) {
+                val eq = ln.indexOf('=')
+                if (eq < 0) continue
+                val v = ln.substring(eq + 1).trim()
+                out[ln.substring(0, eq)] = v.takeIf { it.isNotEmpty() && it != "null" }
+            }
+        }
+        return out
     }
 }

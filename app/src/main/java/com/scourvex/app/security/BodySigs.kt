@@ -58,19 +58,23 @@ class BodySigs private constructor(private val sigs: List<Sig>) {
             buf[2] == 'L'.code.toByte() && buf[3] == 'F'.code.toByte()
         fun applies(s: Sig) = (!s.zipOnly || inZip) && (s.target != 6 || isElf) && len in s.minSize..s.maxSize
 
-        val counts = HashMap<Long, Int>()
+        // Allocated on the first hit only: a clean file (nearly every call) allocates nothing here. BodySigs is
+        // shared by all workers, so these are per call, never fields.
+        var counts: HashMap<Long, Int>? = null
         fun bump(r: Ref) {
             val key = (r.sig.toLong() shl 16) or r.sub.toLong()
-            counts[key] = (counts[key] ?: 0) + 1
+            val c = counts ?: HashMap<Long, Int>().also { counts = it }
+            c[key] = (c[key] ?: 0) + 1
         }
-        val verifies = IntArray(sigs.size)
+        var verifies: HashMap<Int, Int>? = null
 
         val onHit = { refs: List<Ref> ->
             { id: Int, end: Int ->
                 val r = refs[id]
                 val s = sigs[r.sig]
-                if (applies(s) && verifies[r.sig] < MAX_VERIFY) {
-                    verifies[r.sig]++
+                val v = verifies?.get(r.sig) ?: 0
+                if (applies(s) && v < MAX_VERIFY) {
+                    (verifies ?: HashMap<Int, Int>().also { verifies = it })[r.sig] = v + 1
                     val a = r.pat.anchor!!
                     val at = end - a.bytes.size
                     for (start in (at - a.maxOff).coerceAtLeast(0)..(at - a.minOff)) {
@@ -94,10 +98,11 @@ class BodySigs private constructor(private val sigs: List<Sig>) {
             if (r.pat.matchFrom(buf, len, starts)) bump(r)
         }
 
-        val hitSigs = counts.keys.map { (it shr 16).toInt() }.toSet()
+        val found = counts ?: return emptyList()
+        val hitSigs = found.keys.map { (it shr 16).toInt() }.toSet()
         return hitSigs.mapNotNull { si ->
             val s = sigs[si]
-            val c = IntArray(s.subs.size) { counts[(si.toLong() shl 16) or it.toLong()] ?: 0 }
+            val c = IntArray(s.subs.size) { found[(si.toLong() shl 16) or it.toLong()] ?: 0 }
             val ok = s.expr?.eval(c)?.let { it.count > 0 } ?: (c[0] > 0)
             if (ok) s.name else null
         }

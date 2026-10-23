@@ -14,8 +14,9 @@ object SpywareCheck {
     /** Threats for properties that exist and, with Shizuku, files that exist. */
     suspend fun run(spy: SigPack.Spyware): List<Threat> {
         val out = ArrayList<Threat>()
+        val props = if (spy.props.isEmpty()) emptyMap() else allProps()
         for ((prop, label) in spy.props) {
-            if (getprop(prop).isNotEmpty()) out += Threat("prop:$prop", false, prop, "$label (system property)", SOURCE, 0, removable = false)
+            if (!props[prop].isNullOrEmpty()) out += Threat("prop:$prop", false, prop, "$label (system property)", SOURCE, 0, removable = false)
         }
         if (spy.paths.isNotEmpty() && Shell.ready) {
             // Skipped IOC paths are never handed to the shell (it would stat them); filter the sanitised form.
@@ -30,8 +31,22 @@ object SpywareCheck {
         return out
     }
 
-    private fun getprop(name: String): String = runCatching {
-        val p = ProcessBuilder("getprop", name).redirectErrorStream(true).start()
-        p.inputStream.bufferedReader().readText().trim().also { p.waitFor() }
-    }.getOrDefault("")
+    /** Every system property from one `getprop` call (a process per IOC property was the slow part). */
+    private fun allProps(): Map<String, String> = runCatching {
+        val p = ProcessBuilder("getprop").redirectErrorStream(true).start()
+        parseProps(p.inputStream.bufferedReader().readText()).also { p.waitFor() }
+    }.getOrDefault(emptyMap())
+
+    /** Parses `getprop` output: `[name]: [value]`; a value that spans lines counts as non-empty. */
+    fun parseProps(text: String): Map<String, String> {
+        val m = HashMap<String, String>()
+        for (ln in text.lineSequence()) {
+            if (!ln.startsWith("[")) continue
+            val k = ln.indexOf("]: [")
+            if (k < 0) continue
+            val v = ln.substring(k + 4).removeSuffix("]").trim()
+            m[ln.substring(1, k)] = v
+        }
+        return m
+    }
 }
