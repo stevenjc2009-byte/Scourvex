@@ -8,7 +8,6 @@ Android cleaner and malware scanner with a neon UI. Built for a Galaxy S25 Ultra
 - **Security**: a real signature scan of every installed app and every file.
   - ClamAV hash and body signatures (Android, Linux and multi-OS families), rebuilt daily into `sigpack.zip`.
   - Stalkerware package and certificate indicators.
-  - Optional live MalwareBazaar hash lookups, using your own free abuse.ch Auth-Key.
   - A permission risk audit: accessibility, device admin, SMS, hidden icons, sideloading.
 - **Storage**: biggest files, folders and apps, a breakdown by type, and a duplicate finder (size → edge hash → full SHA-256).
 - **Battery**: apps ranked by estimated mAh since the last full charge (Shizuku), or by screen-on time.
@@ -53,11 +52,10 @@ Release signing reads `keystore.properties` (never committed) or the `SCOURVEX_*
 ## Releases
 
 - Pushing a `v*` tag builds a signed APK (`.github/workflows/release.yml`).
-- The `sigpack` prerelease is rebuilt daily (`.github/workflows/sigpack.yml`). Set the repo secret `MB_AUTH_KEY` to also bundle MalwareBazaar Android sample hashes.
+- The `sigpack` prerelease is rebuilt daily (`.github/workflows/sigpack.yml`).
 
 ## Credits
 
 - ClamAV signature databases © Cisco Talos, GPL-2.0.
 - [stalkerware-indicators](https://github.com/AssoEchap/stalkerware-indicators) by Echap, CC BY 4.0.
-- [MalwareBazaar](https://bazaar.abuse.ch/) by abuse.ch.
 - Junk locations informed by [SD Maid SE](https://github.com/d4rken-org/sdmaid-se)'s open filter research.

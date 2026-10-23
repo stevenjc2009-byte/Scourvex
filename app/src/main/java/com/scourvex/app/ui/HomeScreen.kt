@@ -87,7 +87,7 @@ fun HomeScreen(vm: MainViewModel, access: Access, go: (Tab) -> Unit) {
         }
         item { SectionTitle("Tools") }
         item {
-            ToolCard("Security scan", "ClamAV + stalkerware + MalwareBazaar, every app and file", Neon.Red) { go(Tab.SECURITY) }
+            ToolCard("Security scan", "ClamAV + stalkerware + permission audit, every app and file", Neon.Red) { go(Tab.SECURITY) }
             ToolCard("Storage killers", "Biggest files, folders, apps and duplicates", Neon.Amber) { go(Tab.STORAGE) }
             ToolCard("Battery drainers", "Apps using the most power since the last charge", Neon.Lime) { go(Tab.BATTERY) }
         }

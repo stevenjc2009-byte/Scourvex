@@ -5,7 +5,7 @@ import com.scourvex.app.ScourvexApp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/** User settings: skip list, MalwareBazaar key, update preferences. */
+/** User settings: skip list, update preferences. */
 object Prefs {
     private val sp by lazy { ScourvexApp.instance.getSharedPreferences("scourvex", Context.MODE_PRIVATE) }
 
@@ -28,10 +28,6 @@ object Prefs {
         sp.edit().putString("skip", next.joinToString("\n")).apply()
         _skip.value = next
     }
-
-    var mbzKey: String
-        get() = sp.getString("mbz_key", "")!!
-        set(v) = sp.edit().putString("mbz_key", v.trim()).apply()
 
     var autoUpdateCheck: Boolean
         get() = sp.getBoolean("auto_update", true)

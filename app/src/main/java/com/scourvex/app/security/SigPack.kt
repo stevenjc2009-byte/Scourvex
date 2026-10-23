@@ -5,7 +5,7 @@ import java.util.zip.ZipFile
 
 /**
  * The signature pack built by tools/build_sigpack.py from real ClamAV databases
- * (plus stalkerware-indicators and, optionally, MalwareBazaar). Loaded fully into memory.
+ * (plus stalkerware-indicators). Loaded fully into memory.
  */
 class SigPack private constructor(
     val manifest: String,
@@ -19,7 +19,6 @@ class SigPack private constructor(
     val bodySkipped: Int,
     val stalkerPkgs: Map<String, String>, // package -> stalkerware family
     val stalkerCerts: Map<String, String>,// cert SHA1 (lowercase hex) -> family
-    val mbz: Set<String>,                 // MalwareBazaar SHA256 (lowercase hex)
 ) {
     val md5Count: Int get() = sizes.size
     val shaCount: Int get() = sha.values.sumOf { it.size }
@@ -122,9 +121,8 @@ class SigPack private constructor(
                 if (p.size < 3) continue
                 if (p[0] == "pkg") pkgs[p[1]] = p[2] else if (p[0] == "cert") certs[p[1].lowercase()] = p[2]
             }
-            val mbz = lines("mbz.txt").map { it.trim().lowercase() }.filter { it.length == 64 }.toHashSet()
 
-            SigPack(manifest, sizes, md5s, names, starts, sha, fp, body, skipped, pkgs, certs, mbz)
+            SigPack(manifest, sizes, md5s, names, starts, sha, fp, body, skipped, pkgs, certs)
         }
 
         private fun u32(b: ByteArray, o: Int): Long =

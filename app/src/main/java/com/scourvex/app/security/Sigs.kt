@@ -18,7 +18,7 @@ import java.io.File
  */
 object Sigs {
 
-    data class Info(val clamDaily: Int, val clamMain: Int, val built: String, val md5: Int, val body: Int, val stalkerware: Int, val mbz: Int)
+    data class Info(val clamDaily: Int, val clamMain: Int, val built: String, val md5: Int, val body: Int, val stalkerware: Int)
 
     private val file get() = File(ScourvexApp.instance.filesDir, "sigpack.zip")
     private const val URL = "https://github.com/${BuildConfig.GITHUB_REPO}/releases/download/sigpack/sigpack.zip"
@@ -69,7 +69,6 @@ object Sigs {
             md5 = c.getInt("md5") + c.getInt("sha"),
             body = c.getInt("body"),
             stalkerware = c.getInt("stalkerware"),
-            mbz = c.getInt("malwarebazaar"),
         )
     }
 }

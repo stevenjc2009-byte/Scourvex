@@ -61,7 +61,6 @@ class FileInspector(private val pack: SigPack, private val cap: Int = 16 shl 20)
         pack.md5(total, md5b)?.let { found += it }
         pack.hash(shahex, total)?.let { found += it }
         pack.hash(md5hex, total)?.let { found += it }
-        if (shahex in pack.mbz) found += "MalwareBazaar.$ext.${shahex.take(12)}"
 
         when {
             kind == Kind.ZIP -> {

@@ -24,7 +24,7 @@ data class Threat(
     val isApp: Boolean,
     val label: String,
     val detection: String,
-    val source: String,        // "ClamAV", "MalwareBazaar", "Stalkerware IOC"
+    val source: String,        // "ClamAV", "Stalkerware IOC"
     val size: Long,
 ) {
     val pua: Boolean get() = detection.startsWith("PUA.")
@@ -40,7 +40,6 @@ data class ThreatReport(
     val bytesRead: Long,
     val appsScanned: Int,
     val privileged: Boolean,
-    val online: String,        // what happened with MalwareBazaar live lookups
     val signatures: Sigs.Info?,
 )
 
@@ -48,7 +47,6 @@ data class ThreatReport(
 object ThreatScanner {
 
     private const val WORKERS = 2
-    private const val ONLINE_CAP = 300
 
     suspend fun scan(progress: (ThreatProgress) -> Unit): ThreatReport = withContext(Dispatchers.IO) {
         val pack = Sigs.get() ?: error("Virus signatures are not downloaded yet. Tap Update signatures.")
@@ -57,7 +55,6 @@ object ThreatScanner {
         val ignored = Prefs.ignoredThreats
         val threats = ArrayList<Threat>()
         val risks = ArrayList<AppRisk>()
-        val toLookUp = LinkedHashMap<String, Threat>()  // sha256 -> what a hit would be reported as
         var bytes = 0L
 
         // ---- Installed apps ----
@@ -83,9 +80,6 @@ object ThreatScanner {
                     val f = File(apk)
                     val v = inspector.inspect(apk, f.length()) { runCatching { FileInputStream(f) }.getOrNull() }
                     v.detections.forEach { hit(it, "ClamAV", f.length()) }
-                    if (apk == app.sourceDir && v.sha256 != null) {
-                        toLookUp[v.sha256] = Threat(info.packageName, true, label, "", "MalwareBazaar", f.length())
-                    }
                 }
             }
         }
@@ -112,10 +106,6 @@ object ThreatScanner {
                         if (v.inspected) inspected.incrementAndGet()
                         synchronized(lock) {
                             v.detections.forEach { d -> threats += Threat(e.path, false, e.name, d, "ClamAV", e.size) }
-                            val ext = e.name.substringAfterLast('.', "").lowercase()
-                            if (v.sha256 != null && ext in FileInspector.EXEC_EXT && toLookUp.size < ONLINE_CAP * 2) {
-                                toLookUp[v.sha256] = Threat(e.path, false, e.name, "", "MalwareBazaar", e.size)
-                            }
                         }
                     }
                     synchronized(lock) { bytes += ins.bytesRead }
@@ -123,29 +113,10 @@ object ThreatScanner {
             }
         }
 
-        // ---- Optional live MalwareBazaar lookups ----
-        val online = if (!MalwareBazaar.enabled) {
-            "Off (no MalwareBazaar Auth-Key in Settings)"
-        } else {
-            var checked = 0
-            var failure: String? = null
-            for ((sha, t) in toLookUp.entries.take(ONLINE_CAP)) {
-                currentCoroutineContext().ensureActive()
-                progress(ThreatProgress("Online check", t.label, checked, minOf(toLookUp.size, ONLINE_CAP), threats.size))
-                when (val r = MalwareBazaar.lookup(sha)) {
-                    is MalwareBazaar.Known -> threats += t.copy(detection = "MalwareBazaar.${r.signature}")
-                    is MalwareBazaar.Failed -> { failure = r.why; break }
-                    MalwareBazaar.Unknown -> Unit
-                }
-                checked++
-            }
-            failure?.let { "Stopped after $checked: $it" } ?: "$checked hashes checked"
-        }
-
         val visible = threats.filter { it.target !in ignored }.distinctBy { it.target to it.detection }
         ThreatReport(
             visible, risks.filter { it.pkg !in ignored }.sortedByDescending { it.score },
-            entries.size, inspected.get(), bytes, pkgs.size, privileged, online, Sigs.info.value,
+            entries.size, inspected.get(), bytes, pkgs.size, privileged, Sigs.info.value,
         )
     }
 

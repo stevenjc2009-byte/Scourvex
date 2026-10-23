@@ -27,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scourvex.app.BuildConfig
@@ -46,7 +45,6 @@ fun SettingsScreen(vm: MainViewModel, access: Access) {
     val skip by Prefs.skip.collectAsStateWithLifecycle()
     val upd by vm.updater.collectAsStateWithLifecycle()
     var manual by remember { mutableStateOf("") }
-    var key by remember { mutableStateOf(Prefs.mbzKey) }
     var auto by remember { mutableStateOf(Prefs.autoUpdateCheck) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let { treeToPath(it) }?.let { Prefs.addSkip(it) }
@@ -79,20 +77,6 @@ fun SettingsScreen(vm: MainViewModel, access: Access) {
             GhostButton("Add path") {
                 val p = manual.trim().trimEnd('/')
                 if (p.startsWith("/")) { Prefs.addSkip(p); manual = "" } else vm.toast.value = "Paths start with /"
-            }
-        }
-
-        item { SectionTitle("MalwareBazaar live lookups") }
-        item {
-            Text("Optional. With a free abuse.ch Auth-Key, suspicious files are also checked online against MalwareBazaar. Only file hashes are sent, never the files.",
-                color = Neon.Dim, style = MaterialTheme.typography.bodyMedium)
-            Gap()
-            OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), singleLine = true, colors = field,
-                visualTransformation = PasswordVisualTransformation(), label = { Text("abuse.ch Auth-Key") })
-            Gap(6)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GhostButton("Save key") { Prefs.mbzKey = key.trim(); vm.toast.value = if (key.isBlank()) "Key removed" else "Key saved" }
-                GhostButton("Get a key", color = Neon.Dim) { Perms.openUrl(ctx, "https://auth.abuse.ch/") }
             }
         }
 
@@ -141,7 +125,6 @@ fun SettingsScreen(vm: MainViewModel, access: Access) {
             Text(
                 "Virus signatures: ClamAV (Cisco Talos), GPL-2.0, rebuilt daily into the Scourvex signature pack.\n" +
                     "Stalkerware indicators: Echap stalkerware-indicators, CC BY 4.0.\n" +
-                    "Hash intelligence: abuse.ch MalwareBazaar.\n" +
                     "Junk locations informed by SD Maid SE's open filter research.\n" +
                     "Source: github.com/${BuildConfig.GITHUB_REPO}",
                 color = Neon.Dim, style = MaterialTheme.typography.bodyMedium,

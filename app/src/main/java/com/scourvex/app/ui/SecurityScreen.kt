@@ -80,8 +80,6 @@ fun SecurityScreen(vm: MainViewModel, access: Access) {
                     Stat(formatBytes(r.bytesRead), "read", Neon.Violet)
                 }
             }
-            Gap()
-            Text(r.online, color = Neon.Dim, style = MaterialTheme.typography.bodyMedium)
             if (!r.privileged) { Gap(); Banner("Android/data and obb were not scanned — start Shizuku for full coverage", Neon.Amber) }
         }
         if (r.threats.isNotEmpty()) {
@@ -118,7 +116,7 @@ private fun SignatureCard(info: Sigs.Info?, msg: String?, update: () -> Unit) {
             if (info == null) Text("Not downloaded yet", color = Neon.Amber, style = MaterialTheme.typography.bodyMedium)
             else {
                 Text("ClamAV daily ${info.clamDaily} · main ${info.clamMain} · built ${info.built}", color = Neon.Dim, style = MaterialTheme.typography.bodyMedium)
-                Text("%,d hashes · %,d body sigs · %,d stalkerware IOCs · %,d MalwareBazaar".format(info.md5, info.body, info.stalkerware, info.mbz),
+                Text("%,d hashes · %,d body sigs · %,d stalkerware IOCs".format(info.md5, info.body, info.stalkerware),
                     color = Neon.Dim, style = MaterialTheme.typography.labelSmall)
             }
             if (msg != null) Text(msg, color = if (msg.contains("failed")) Neon.Red else Neon.Cyan, style = MaterialTheme.typography.bodyMedium)

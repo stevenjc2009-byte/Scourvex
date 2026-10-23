@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the Scourvex signature pack from real ClamAV CVD files.
 
-Usage: build_sigpack.py <dir-with-main.cvd-daily.cvd> <out.zip> [--mbz-key KEY]
+Usage: build_sigpack.py <dir-with-main.cvd-daily.cvd> <out.zip>
 
 Output zip (read by app/src/main/java/com/scourvex/app/security/SigPack.kt):
   manifest.json    versions, counts, build time
@@ -12,9 +12,8 @@ Output zip (read by app/src/main/java/com/scourvex/app/security/SigPack.kt):
   fp.txt           hex:size             (ClamAV false-positive whitelist)
   body.txt         N<TAB>ndb-line  /  L<TAB>ldb-line (only syntax the app's matcher supports)
   stalkerware.tsv  pkg<TAB>package<TAB>app  /  cert<TAB>SHA1<TAB>app
-  mbz.txt          MalwareBazaar SHA256 of APK/DEX/ELF/JAR samples (only with --mbz-key)
+  mbz.txt          always empty; kept so app v1.0.0-1.0.1 can still read the pack
 """
-import csv
 import datetime
 import gzip
 import io
@@ -131,23 +130,8 @@ def stalkerware() -> list[str]:
     return out
 
 
-def malwarebazaar(key: str) -> list[str]:
-    url = f"https://mb-api.abuse.ch/v2/files/exports/{key}/full.csv.zip"
-    data = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=600).read()
-    keep = {"apk", "dex", "elf", "jar", "sh", "so"}
-    out = []
-    with zipfile.ZipFile(io.BytesIO(data)) as z:
-        with z.open(z.namelist()[0]) as f:
-            rows = csv.reader(io.TextIOWrapper(f, "utf-8", "replace"), skipinitialspace=True)
-            for row in rows:
-                if len(row) > 6 and not row[0].startswith("#") and row[6].strip('" ').lower() in keep:
-                    out.append(row[1].strip('" ').lower())
-    return out
-
-
 def main() -> None:
     src, out = Path(sys.argv[1]), Path(sys.argv[2])
-    mbz_key = sys.argv[sys.argv.index("--mbz-key") + 1] if "--mbz-key" in sys.argv else None
     cvds = {n: read_cvd(src / f"{n}.cvd" if (src / f"{n}.cvd").exists() else src / f"{n}.cld") for n in ("main", "daily")}
     files = {k: v for c in cvds.values() for k, v in c["files"].items()}
 
@@ -200,14 +184,14 @@ def main() -> None:
         recs += struct.pack("<I", size) + h + struct.pack("<I", len(names))
         names.append(name)
     stalk = stalkerware()
-    mbz = malwarebazaar(mbz_key) if mbz_key else []
 
     manifest = {
         "format": 1,
         "built": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "clamav": {n: {"version": c["version"], "built": c["built"]} for n, c in cvds.items()},
         "counts": {"md5": len(names), "sha": len(sha), "fp": len(fp), "body": len(body),
-                   "body_unsupported": dropped, "stalkerware": len(stalk), "malwarebazaar": len(mbz)},
+                   "body_unsupported": dropped, "stalkerware": len(stalk),
+                   "malwarebazaar": 0},  # app v1.0.0-1.0.1 require this key
     }
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("manifest.json", json.dumps(manifest, indent=1))
@@ -217,7 +201,7 @@ def main() -> None:
         z.writestr("fp.txt", "\n".join(fp))
         z.writestr("body.txt", "\n".join(body))
         z.writestr("stalkerware.tsv", "\n".join(stalk))
-        z.writestr("mbz.txt", "\n".join(mbz))
+        z.writestr("mbz.txt", "")  # app v1.0.0-1.0.1 read this file
     print(json.dumps(manifest, indent=1))
     print("bytes", out.stat().st_size)
 
