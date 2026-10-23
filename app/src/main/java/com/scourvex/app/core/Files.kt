@@ -12,8 +12,8 @@ import java.io.FileInputStream
 import java.io.InputStream
 import java.util.Locale
 
-/** One file or directory found during a walk. */
-data class Entry(val path: String, val size: Long, val mtime: Long, val isDir: Boolean) {
+/** One file or directory found during a walk. [unreadable]: a folder that could not be listed (second event for the same path). */
+data class Entry(val path: String, val size: Long, val mtime: Long, val isDir: Boolean, val unreadable: Boolean = false) {
     val name: String get() = path.substringAfterLast('/')
 }
 
@@ -35,34 +35,41 @@ object Files {
 
     fun isRestricted(path: String) = roots().any { r -> restricted(r).any { path == it || path.startsWith("$it/") } }
 
-    fun skipped(path: String, skip: List<String>) = skip.any { path == it || path.startsWith("$it/") }
+    private fun under(path: String, dirs: List<String>) = dirs.any { path == it || path.startsWith("$it/") }
 
     /**
-     * Calls [visit] for every entry under all roots, honouring the skip list.
-     * Returns true when Android/data + obb were included (Shizuku ready).
+     * Calls [visit] for every entry under all roots. The skip list is read live; a skipped path is
+     * dropped from its parent's listing before any stat. Returns true when Android/data + obb were
+     * included (Shizuku ready).
      */
-    suspend fun walkAll(skip: List<String>, visit: (Entry) -> Unit): Boolean {
+    suspend fun walkAll(visit: (Entry) -> Unit): Boolean {
         var privileged = true
         for (root in roots()) {
             val blocked = restricted(root)
-            walkDirect(File(root), skip + blocked, visit)
+            walkDirect(File(root), visit, blocked)
             for (b in blocked) {
-                if (skipped(b, skip)) continue
-                if (!walkShell(b, skip, visit)) privileged = false
+                if (SkipGuard.isSkipped(b)) continue
+                if (!walkShell(b, visit)) privileged = false
             }
         }
         return privileged
     }
 
-    suspend fun walkDirect(dir: File, skip: List<String>, visit: (Entry) -> Unit) {
+    /** Walks [dir] directly; [exclude] folders are left for the shell walker. Unlistable folders are reported [Entry.unreadable]. */
+    suspend fun walkDirect(dir: File, visit: (Entry) -> Unit, exclude: List<String> = emptyList()) {
+        if (!SkipGuard.allows(dir.path)) return
         val stack = ArrayDeque<File>().apply { add(dir) }
         while (stack.isNotEmpty()) {
             currentCoroutineContext().ensureActive()
             val d = stack.removeLast()
-            val children = d.listFiles() ?: continue
+            val g = SkipGuard.live()          // re-read per directory: additions mid-scan apply
+            if (g.isSkipped(d.path)) continue
+            val children = d.listFiles()
+            if (children == null) { visit(Entry(d.path, 0, 0, true, unreadable = true)); continue }
             for (f in children) {
-                val p = f.absolutePath
-                if (skipped(p, skip)) continue
+                val p = f.path
+                // Name check first: no stat, isDirectory or symlink probe ever touches a skipped child.
+                if (g.isSkipped(p) || under(p, exclude)) continue
                 if (java.nio.file.Files.isSymbolicLink(f.toPath())) continue
                 if (f.isDirectory) {
                     visit(Entry(p, 0, f.lastModified(), true))
@@ -75,41 +82,47 @@ object Files {
     }
 
     /** Walks [root] as shell uid. Returns false when Shizuku is not available. */
-    suspend fun walkShell(root: String, skip: List<String>, visit: (Entry) -> Unit): Boolean {
-        val pfd = Shell.walkPipe(root, skip) ?: return false
+    suspend fun walkShell(root: String, visit: (Entry) -> Unit): Boolean {
+        if (!SkipGuard.allows(root)) return true
+        val pfd = Shell.walkPipe(root, SkipGuard.live().raw) ?: return false
         ParcelFileDescriptor.AutoCloseInputStream(pfd).bufferedReader().useLines { lines ->
             for (ln in lines) {
                 currentCoroutineContext().ensureActive()
                 val a = ln.split('\t', limit = 4)
-                if (a.size == 4) visit(Entry(a[3], a[0].toLong(), a[1].toLong(), a[2] == "d"))
+                // The service got the list at start; entries for paths skipped since are discarded here.
+                if (a.size == 4 && !SkipGuard.isSkipped(a[3])) visit(Entry(a[3], a[0].toLong(), a[1].toLong(), a[2] != "f", unreadable = a[2] == "u"))
             }
         }
         return true
     }
 
-    /** Opens a file for reading, through Shizuku when it lives in a restricted folder. */
+    /** Opens a file for reading, through Shizuku when it lives in a restricted folder. Null for skipped paths. */
     suspend fun open(path: String): InputStream? {
-        if (!isRestricted(path)) return runCatching { FileInputStream(path) }.getOrNull()
+        val g = SkipGuard.live()
+        if (!g.allows(path)) return null
+        if (!isRestricted(path)) {
+            // A link planted after the scan could point into a skipped folder: never follow one.
+            if (java.nio.file.Files.isSymbolicLink(java.nio.file.Paths.get(path))) return null
+            return runCatching { FileInputStream(path) }.getOrNull()
+        }
         val s = Shell.get() ?: return null
-        val pfd = runCatching { s.open(path) }.getOrNull() ?: return null
+        val pfd = runCatching { s.open(path, g.raw.toTypedArray()) }.getOrNull() ?: return null
         return ParcelFileDescriptor.AutoCloseInputStream(pfd)
     }
 
-    /** Deletes a file or folder tree. Returns bytes freed (0 if already gone, -1 on failure). */
+    /**
+     * Deletes a file or folder tree, never touching the skip list. Returns bytes freed (0 if already
+     * gone, -1 on failure or when [path] is skipped). A folder holding skipped entries stays, minus its other content.
+     */
     suspend fun delete(path: String): Long {
+        val g = SkipGuard.live()
+        if (!g.allows(path)) return -1
         // /data/... (spyware drop folders like /data/local/tmp) is only reachable as the shell user.
         if (isRestricted(path) || path.startsWith("/data/")) {
             val s = Shell.get() ?: return -1
-            return runCatching { s.delete(path) }.getOrDefault(-1)
+            return runCatching { s.delete(path, g.raw.toTypedArray()) }.getOrDefault(-1)
         }
-        val f = File(path)
-        if (!f.exists()) return 0
-        var freed = 0L
-        f.walkBottomUp().forEach { x ->
-            val len = if (x.isFile) x.length() else 0
-            if (x.delete()) freed += len
-        }
-        return if (f.exists()) -1 else freed
+        return GuardedDelete.delete(path) { SkipGuard.live() }
     }
 }
 

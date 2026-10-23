@@ -2,6 +2,8 @@ package com.scourvex.app.shizuku
 
 import android.os.ParcelFileDescriptor
 import com.scourvex.app.IShellService
+import com.scourvex.app.core.GuardedDelete
+import com.scourvex.app.core.SkipSet
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.system.exitProcess
@@ -32,11 +34,11 @@ class ShellService : IShellService.Stub() {
         return "${p.exitValue()}\n$text"
     }
 
-    override fun walk(root: String, skipPrefixes: Array<String>, sink: ParcelFileDescriptor) {
+    override fun walk(root: String, skip: Array<String>, sink: ParcelFileDescriptor) {
         Thread {
             FileOutputStream(sink.fileDescriptor).bufferedWriter().use { w ->
                 try {
-                    walkInto(File(root), skipPrefixes, w)
+                    walkInto(File(root), SkipSet.of(skip.toList()), w)
                 } catch (_: Throwable) {
                     // Pipe closed by the reader (scan cancelled) — stop quietly.
                 }
@@ -45,14 +47,17 @@ class ShellService : IShellService.Stub() {
         }.start()
     }
 
-    private fun walkInto(dir: File, skip: Array<String>, w: java.io.Writer) {
+    private fun walkInto(dir: File, skip: SkipSet, w: java.io.Writer) {
+        if (!skip.allows(dir.path)) return
         val stack = ArrayDeque<File>().apply { add(dir) }
         while (stack.isNotEmpty()) {
             val d = stack.removeLast()
-            val children = d.listFiles() ?: continue
+            val children = d.listFiles()
+            if (children == null) { w.write("0\t0\tu\t${d.path}\n"); continue }
             for (f in children) {
-                val path = f.absolutePath
-                if (skip.any { path == it || path.startsWith("$it/") }) continue
+                val path = f.path
+                // Name check before any stat: a skipped child is never probed.
+                if (skip.isSkipped(path)) continue
                 // Do not follow symlinks: they can loop or escape the tree.
                 if (java.nio.file.Files.isSymbolicLink(f.toPath())) continue
                 if (f.isDirectory) {
@@ -65,18 +70,15 @@ class ShellService : IShellService.Stub() {
         }
     }
 
-    override fun open(path: String): ParcelFileDescriptor =
-        ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)
+    override fun open(path: String, skip: Array<String>): ParcelFileDescriptor {
+        if (!SkipSet.of(skip.toList()).allows(path)) throw SecurityException("skipped")
+        if (java.nio.file.Files.isSymbolicLink(java.nio.file.Paths.get(path))) throw SecurityException("symlink")
+        return ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)
+    }
 
-    override fun delete(path: String): Long {
-        val f = File(path)
-        if (!f.exists()) return 0
-        var freed = 0L
-        f.walkBottomUp().forEach { x ->
-            val len = if (x.isFile) x.length() else 0L
-            if (x.delete()) freed += len
-        }
-        return if (f.exists()) -1 else freed
+    override fun delete(path: String, skip: Array<String>): Long {
+        val g = SkipSet.of(skip.toList())
+        return GuardedDelete.delete(path) { g }
     }
 
     private companion object {

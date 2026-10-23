@@ -9,7 +9,8 @@ import android.os.storage.StorageManager
 import com.scourvex.app.ScourvexApp
 import com.scourvex.app.core.Entry
 import com.scourvex.app.core.Files
-import com.scourvex.app.core.Prefs
+import com.scourvex.app.core.SkipGuard
+import com.scourvex.app.core.SkipSet
 
 data class JunkItem(
     val path: String,          // file/dir path, or "app:<package>" for internal app cache
@@ -39,7 +40,6 @@ object JunkScanner {
             .associateBy { it.packageName }
         val isInstalled = { p: String -> p in installed }
 
-        val skip = Prefs.skip.value
         val roots = Files.roots()
         val targets = HashMap<String, JunkItem>()   // junk dir path -> item being summed
         val fileHits = ArrayList<JunkItem>()
@@ -57,7 +57,7 @@ object JunkScanner {
             return null
         }
 
-        val visit = { e: Entry ->
+        val visitEntry = { e: Entry ->
             count++
             if (count % 500 == 0) progress(e.path, count)
             val root = rootOf(e.path)
@@ -81,12 +81,20 @@ object JunkScanner {
                 else if (e.path in targets) markNonEmpty(e.path, nonEmpty)
             }
         }
-        val privileged = Files.walkAll(skip, visit)
+        val visit = { e: Entry ->
+            // A folder that could not be listed may hold anything: never offer it (or its parents) as empty.
+            if (e.unreadable) { nonEmpty.add(e.path); markNonEmpty(e.path, nonEmpty) } else visitEntry(e)
+        }
+        val privileged = Files.walkAll(visit)
 
+        // Junk folders that hold a skipped entry stay in the list (size already excludes the skipped part);
+        // deleting them goes through the guarded delete, which removes only the non-skipped content.
+        val live = SkipGuard.live()
         val items = ArrayList<JunkItem>()
         items += targets.values.filter { it.size > 0 || it.category == JunkCategory.LEFTOVERS || it.category == JunkCategory.RECYCLE_BINS }
         items += fileHits
-        items += emptyFolders(dirs, nonEmpty, roots)
+        items += emptyFolders(dirs, nonEmpty, roots, live)
+        items.removeAll { !it.path.startsWith("app:") && live.isSkipped(it.path) }
 
         val stats = appCaches(ctx, installed.values)
         if (stats != null) {
@@ -103,8 +111,9 @@ object JunkScanner {
         while (cur.isNotEmpty() && set.add(cur)) cur = cur.substringBeforeLast('/', "")
     }
 
-    private fun emptyFolders(dirs: Set<String>, nonEmpty: Set<String>, roots: List<String>): List<JunkItem> {
-        val empty = dirs.filter { it !in nonEmpty }.filter { d ->
+    private fun emptyFolders(dirs: Set<String>, nonEmpty: Set<String>, roots: List<String>, skip: SkipSet): List<JunkItem> {
+        // A folder that is a parent of a skip entry is not empty, even though the skipped child was never walked.
+        val empty = dirs.filter { it !in nonEmpty && !skip.isAncestorOfSkip(it) }.filter { d ->
             val root = roots.firstOrNull { d.startsWith("$it/") } ?: return@filter false
             val rel = d.substring(root.length + 1)
             // Leave Android/ alone (apps expect their folders) and the standard top-level folders.

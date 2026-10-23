@@ -37,7 +37,8 @@ object DeviceAudit {
 
         if (!ctx.getSystemService(KeyguardManager::class.java).isDeviceSecure)
             out += DeviceFinding("No screen lock", "Anyone who picks up the phone can open it and every app on it.", H, Settings.ACTION_SECURITY_SETTINGS)
-        if (global("package_verifier_enable") == "0")
+        // The Play Protect switch writes package_verifier_user_consent=-1 (checked on Android 16); older builds used package_verifier_enable=0.
+        if (global("package_verifier_user_consent") == "-1" || global("package_verifier_enable") == "0")
             out += DeviceFinding("Play Protect app scanning is off", "Google no longer checks installed apps for harmful behaviour.", H, Settings.ACTION_SECURITY_SETTINGS)
         if (global("verifier_verify_adb_installs") == "0")
             out += DeviceFinding("Apps installed over USB are not checked", "\"Verify apps over USB\" is off in Developer options.", M, DEV)

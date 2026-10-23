@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scourvex.app.BuildConfig
 import com.scourvex.app.core.Files
 import com.scourvex.app.core.Prefs
+import com.scourvex.app.core.SkipGuard
 import com.scourvex.app.shizuku.Shell
 import com.scourvex.app.ui.components.GhostButton
 import com.scourvex.app.ui.components.GlowCard
@@ -75,7 +76,7 @@ fun SettingsScreen(vm: MainViewModel, access: Access) {
                 label = { Text("Or type a path, e.g. ${Files.primary}/DCIM/Camera") })
             Gap(6)
             GhostButton("Add path") {
-                val p = manual.trim().trimEnd('/')
+                val p = SkipGuard.normalize(manual)
                 if (p.startsWith("/")) { Prefs.addSkip(p); manual = "" } else vm.toast.value = "Paths start with /"
             }
         }
@@ -152,5 +153,5 @@ internal fun treeToPath(uri: Uri): String? {
     val vol = id.substringBefore(':')
     val rel = id.substringAfter(':', "").trimEnd('/')
     val base = if (vol.equals("primary", true)) Files.primary else "/storage/$vol"
-    return if (rel.isEmpty()) base else "$base/$rel"
+    return SkipGuard.normalize(if (rel.isEmpty()) base else "$base/$rel")
 }

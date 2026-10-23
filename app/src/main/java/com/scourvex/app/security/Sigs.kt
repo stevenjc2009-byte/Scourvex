@@ -11,6 +11,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.nio.file.StandardCopyOption
 
 /**
  * Owns the on-device signature pack: downloads it from the repo's "sigpack" release
@@ -50,8 +51,8 @@ object Sigs {
                 fresh.delete()
                 throw IllegalStateException("Downloaded signatures are damaged: ${e.message}")
             }
-            file.delete()
-            fresh.renameTo(file)
+            // One atomic rename replaces the old pack: there is never a moment with no pack on disk.
+            java.nio.file.Files.move(fresh.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
             setLoaded(p)
             _info.value!!
         }

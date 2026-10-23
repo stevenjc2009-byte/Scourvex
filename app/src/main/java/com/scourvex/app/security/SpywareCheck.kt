@@ -1,5 +1,6 @@
 package com.scourvex.app.security
 
+import com.scourvex.app.core.SkipGuard
 import com.scourvex.app.shizuku.Shell
 
 /**
@@ -17,7 +18,9 @@ object SpywareCheck {
             if (getprop(prop).isNotEmpty()) out += Threat("prop:$prop", false, prop, "$label (system property)", SOURCE, 0, removable = false)
         }
         if (spy.paths.isNotEmpty() && Shell.ready) {
-            val quoted = spy.paths.keys.joinToString(" ") { "'" + it.replace("'", "") + "'" }
+            // Skipped IOC paths are never handed to the shell (it would stat them); filter the sanitised form.
+            val safe = spy.paths.keys.map { it.replace("'", "") }.filter { SkipGuard.allows(it) }
+            val quoted = safe.joinToString(" ") { "'$it'" }
             val found = Shell.exec("for p in $quoted; do [ -e \"\$p\" ] && echo \"\$p\"; done")?.second.orEmpty()
             for (path in found.lines().map { it.trim() }.filter { it.isNotEmpty() }) {
                 val label = spy.paths[path] ?: continue

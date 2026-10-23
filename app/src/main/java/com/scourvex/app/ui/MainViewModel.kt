@@ -13,6 +13,7 @@ import com.scourvex.app.clean.JunkScanner
 import com.scourvex.app.core.Entry
 import com.scourvex.app.core.Files
 import com.scourvex.app.core.Prefs
+import com.scourvex.app.core.SkipGuard
 import com.scourvex.app.security.Sigs
 import com.scourvex.app.security.Threat
 import com.scourvex.app.security.ThreatProgress
@@ -135,7 +136,7 @@ class MainViewModel : ViewModel() {
     }
 
     fun ignoreThreat(t: Threat) {
-        Prefs.ignoredThreats = Prefs.ignoredThreats + t.target
+        Prefs.ignoredThreats = Prefs.ignoredThreats + t.ignoreKey
         dropThreat(t.target)
     }
 
@@ -149,7 +150,12 @@ class MainViewModel : ViewModel() {
 
     fun deleteFile(path: String, after: () -> Unit = {}) = viewModelScope.launch {
         val r = Files.delete(path)
-        toast.value = if (r >= 0) "Deleted ${path.substringAfterLast('/')}" else "Could not delete ${path.substringAfterLast('/')}"
+        val name = path.substringAfterLast('/')
+        toast.value = when {
+            r >= 0 -> "Deleted $name"
+            SkipGuard.isSkipped(path) -> "Not deleted: $name is on your skip list"
+            else -> "Could not delete $name"
+        }
         if (r >= 0) { dropThreat(path); after() }
     }
 
@@ -194,9 +200,9 @@ class MainViewModel : ViewModel() {
     fun deleteMany(paths: List<String>) = run {
         var ok = 0
         var freed = 0L
-        for (p in paths) { val r = Files.delete(p); if (r >= 0) { ok++; freed += r } }
+        val gone = HashSet<String>()
+        for (p in paths) { val r = Files.delete(p); if (r >= 0) { ok++; freed += r; gone += p } }   // refused/failed stay listed
         toast.value = "Deleted $ok of ${paths.size} (${com.scourvex.app.core.formatBytes(freed)})"
-        val gone = paths.toSet()
         (dupes.value as? Dupes.Done)?.let { d ->
             dupes.value = Dupes.Done(d.groups.map { g -> g.copy(files = g.files.filter { it.path !in gone }) }.filter { it.files.size > 1 })
         }

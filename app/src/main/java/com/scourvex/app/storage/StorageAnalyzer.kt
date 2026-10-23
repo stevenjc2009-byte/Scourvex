@@ -8,7 +8,6 @@ import com.scourvex.app.ScourvexApp
 import com.scourvex.app.clean.JunkScanner
 import com.scourvex.app.core.Entry
 import com.scourvex.app.core.Files
-import com.scourvex.app.core.Prefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.PriorityQueue
@@ -37,7 +36,7 @@ object StorageAnalyzer {
         val folder = HashMap<String, LongArray>()     // dir -> [bytes, files], counted at every ancestor
         val roots = Files.roots()
         var n = 0
-        val privileged = Files.walkAll(Prefs.skip.value) { e ->
+        val privileged = Files.walkAll { e ->
             if (++n % 1000 == 0) progress(e.path, n)
             if (e.isDir) return@walkAll
             files += e

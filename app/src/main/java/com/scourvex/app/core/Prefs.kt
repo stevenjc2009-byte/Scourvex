@@ -12,19 +12,20 @@ object Prefs {
     private val _skip by lazy { MutableStateFlow(loadSkip()) }
     val skip: StateFlow<List<String>> get() = _skip
 
+    /** Stored entries, normalised on load so old raw entries (/sdcard/x, trailing /, //) still match. */
     private fun loadSkip(): List<String> =
-        sp.getString("skip", "")!!.split('\n').filter { it.isNotBlank() }
+        sp.getString("skip", "")!!.split('\n').map { SkipGuard.normalize(it) }.filter { it.startsWith("/") }.distinct()
 
     fun addSkip(path: String) {
-        val clean = path.trimEnd('/')
-        if (clean.isBlank()) return
+        val clean = SkipGuard.normalize(path)
+        if (!clean.startsWith("/")) return
         val next = (loadSkip() + clean).distinct().sorted()
         sp.edit().putString("skip", next.joinToString("\n")).apply()
         _skip.value = next
     }
 
     fun removeSkip(path: String) {
-        val next = loadSkip() - path
+        val next = loadSkip() - SkipGuard.normalize(path)
         sp.edit().putString("skip", next.joinToString("\n")).apply()
         _skip.value = next
     }

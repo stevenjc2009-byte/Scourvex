@@ -71,7 +71,8 @@ object JunkRules {
         // Samsung keeps each app's deleted files in Android/.Trash/<package>/.
         if (seg.size == 3 && seg[0] == "Android" && seg[1] == ".Trash") return DirHit(JunkCategory.RECYCLE_BINS, seg[2])
         if (seg[0] == "Android" && seg.size <= 2) return null
-        if (name in thumbDirs) return DirHit(JunkCategory.THUMBNAILS)
+        // Outside app folders only hidden (dot) thumbnail caches count: a plain "Thumbnails" folder may be the user's own (auto-cleaned category).
+        if (name in thumbDirs && (name.startsWith(".") || name == "albumthumbs")) return DirHit(JunkCategory.THUMBNAILS)
         if (name in binDirs || name.startsWith(".trash-")) return DirHit(JunkCategory.RECYCLE_BINS)
         if (name == "lost.dir") return DirHit(JunkCategory.LOST_FILES)
         if (seg.size <= 2 && name in adDirs) return DirHit(JunkCategory.ADS)

@@ -17,6 +17,8 @@ class JunkRulesTest {
         assertEquals(JunkCategory.RECYCLE_BINS, dir("Android/.Trash/com.sec.android.gallery3d")?.category)
         assertEquals(JunkCategory.LOST_FILES, dir("LOST.DIR")?.category)
         assertNull(dir("DCIM/Camera"))
+        assertNull(dir("Pictures/Thumbnails"))                         // a user's own folder, never auto-cleaned
+        assertNull(dir("Documents/Work/thumbs"))
         assertNull(dir("Android/data/com.whatsapp/files"))
         assertNull(dir("Android/data"))
     }

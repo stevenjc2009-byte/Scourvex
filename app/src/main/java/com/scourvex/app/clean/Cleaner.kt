@@ -4,6 +4,7 @@ import android.app.usage.StorageStatsManager
 import android.os.storage.StorageManager
 import com.scourvex.app.ScourvexApp
 import com.scourvex.app.core.Files
+import com.scourvex.app.core.SkipGuard
 import com.scourvex.app.shizuku.Shell
 
 data class CleanReport(val freed: Long, val deleted: Int, val failed: List<String>, val cacheNote: String?)
@@ -38,6 +39,9 @@ object Cleaner {
      * all of them. Returns an error note, or null on success.
      */
     private suspend fun clearAppCaches(): String? {
+        // trim-caches empties every Android/data/<pkg>/cache system-wide and cannot exclude one; there is
+        // no per-app cache cleaner here, so if the skip list could be hit we clear nothing.
+        if (SkipGuard.blocksTrimCaches()) return "App caches skipped because a skip-list folder is inside an app cache"
         val r = Shell.exec("pm trim-caches 4096G") ?: return "Internal app caches need Shizuku (see Settings)"
         return if (r.first == 0) null else "pm trim-caches failed: ${r.second.trim().take(200)}"
     }

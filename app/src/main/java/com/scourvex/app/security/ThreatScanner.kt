@@ -8,6 +8,7 @@ import com.scourvex.app.clean.JunkScanner
 import com.scourvex.app.core.Entry
 import com.scourvex.app.core.Files
 import com.scourvex.app.core.Prefs
+import com.scourvex.app.core.SkipGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
@@ -15,7 +16,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileInputStream
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -29,6 +29,8 @@ data class Threat(
     val removable: Boolean = true, // false for traces like a system property: nothing to delete
 ) {
     val pua: Boolean get() = detection.startsWith("PUA.")
+    /** What "Ignore" stores: this detection on this target only. */
+    val ignoreKey: String get() = "$target\t$detection"
 }
 
 data class ThreatProgress(val phase: String, val current: String, val done: Int, val total: Int, val found: Int)
@@ -83,8 +85,9 @@ object ThreatScanner {
             val system = app.flags and ApplicationInfo.FLAG_SYSTEM != 0 && app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP == 0
             if (!system) {
                 for (apk in listOfNotNull(app.sourceDir) + (app.splitSourceDirs ?: emptyArray())) {
+                    if (!SkipGuard.allows(apk)) continue   // skip list wins even for installed APKs
                     val f = File(apk)
-                    val v = inspector.inspect(apk, f.length()) { runCatching { FileInputStream(f) }.getOrNull() }
+                    val v = inspector.inspect(apk, f.length()) { Files.open(apk) }
                     v.detections.forEach { hit(it, source(it), f.length()) }
                 }
             }
@@ -94,7 +97,7 @@ object ThreatScanner {
         // ---- Every file ----
         progress(ThreatProgress("Files", "Listing storage…", 0, 0, threats.size))
         val entries = ArrayList<Entry>()
-        val privileged = Files.walkAll(Prefs.skip.value) { e -> if (!e.isDir) entries += e }
+        val privileged = Files.walkAll { e -> if (!e.isDir) entries += e }
         val next = AtomicInteger(0)
         val inspected = AtomicInteger(0)
         val lock = Any()
@@ -124,9 +127,11 @@ object ThreatScanner {
         val device = DeviceAudit.run(ctx)
         val sensors = SensorUse.read()
 
-        val visible = threats.filter { it.target !in ignored }.distinctBy { it.target to it.detection }
+        // Ignore is per detection: ignoring one finding never hides a different one on the same app or file.
+        val visible = threats.filter { it.ignoreKey !in ignored }.distinctBy { it.target to it.detection }
+        val ignoredTargets = ignored.map { it.substringBefore('	') }.toSet()
         ThreatReport(
-            visible, risks.filter { it.pkg !in ignored }.sortedByDescending { it.score },
+            visible, risks.filter { it.pkg !in ignoredTargets }.sortedByDescending { it.score },
             entries.size, inspected.get(), bytes, pkgs.size, privileged, Sigs.info.value, device, sensors,
         )
     }
