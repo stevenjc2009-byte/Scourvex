@@ -34,6 +34,7 @@ import com.scourvex.app.ui.components.Banner
 import com.scourvex.app.ui.components.GhostButton
 import com.scourvex.app.ui.components.GlowCard
 import com.scourvex.app.ui.components.NeonButton
+import com.scourvex.app.ui.components.ScanBar
 import com.scourvex.app.ui.components.ScanOrb
 import com.scourvex.app.ui.components.SectionTitle
 import com.scourvex.app.ui.theme.Neon
@@ -66,6 +67,11 @@ fun CleanScreen(vm: MainViewModel, access: Access) {
             }
         }
         item {
+            when (val s = state) {
+                is Junk.Scanning -> { ScanBar("Checking folders · ${"%,d".format(s.count)} files so far", null); Gap(10) }
+                is Junk.Cleaning -> { ScanBar("Deleting ${s.done} of ${s.total}", if (s.total > 0) s.done.toFloat() / s.total else null, accent = Neon.Lime); Gap(10) }
+                else -> {}
+            }
             when (state) {
                 is Junk.Scanning, is Junk.Cleaning -> GhostButton("Stop", Modifier.fillMaxWidth(), Neon.Red) { vm.cancel() }
                 else -> NeonButton(if (result == null) "Scan" else "Scan again", Modifier.fillMaxWidth()) { vm.scanJunk() }

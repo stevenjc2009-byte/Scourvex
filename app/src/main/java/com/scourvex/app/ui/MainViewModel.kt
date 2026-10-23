@@ -10,9 +10,11 @@ import com.scourvex.app.clean.Cleaner
 import com.scourvex.app.clean.JunkItem
 import com.scourvex.app.clean.JunkResult
 import com.scourvex.app.clean.JunkScanner
+import com.scourvex.app.core.CrashGuard
 import com.scourvex.app.core.Entry
 import com.scourvex.app.core.Files
 import com.scourvex.app.core.Prefs
+import com.scourvex.app.core.ScanKeeper
 import com.scourvex.app.core.SkipGuard
 import com.scourvex.app.security.Sigs
 import com.scourvex.app.security.Threat
@@ -26,6 +28,8 @@ import com.scourvex.app.storage.StorageReport
 import com.scourvex.app.storage.UnusedApps
 import com.scourvex.app.update.Updater
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -65,9 +69,12 @@ class MainViewModel : ViewModel() {
     val store = MutableStateFlow<Store>(Store.Idle)
     val dupes = MutableStateFlow<Dupes>(Dupes.Idle)
     val battery = MutableStateFlow<BatteryReport?>(null)
+    val batteryLoading = MutableStateFlow(false)
     val sigUpdate = MutableStateFlow<String?>(null)      // progress / error text while updating
     val toast = MutableStateFlow<String?>(null)
     val updater: StateFlow<Updater.State> = Updater.state
+    /** Shown once after a crash, or after Android killed the app mid-scan. */
+    val notice = MutableStateFlow(CrashGuard.takeNotice())
 
     private var job: Job? = null
 
@@ -76,6 +83,12 @@ class MainViewModel : ViewModel() {
             Sigs.get()
             if (!Sigs.installed) updateSignatures()
             Updater.checkIfDue()
+        }
+        viewModelScope.launch {
+            // The Shizuku walker got the skip list when it started; stop rather than let it read a folder added since.
+            Prefs.skip.drop(1).collect {
+                if (busy) { cancel(); toast.value = "Scan stopped because the skip list changed. Run it again." }
+            }
         }
         viewModelScope.launch {
             UnusedApps.results.collect { (pkg, error) ->
@@ -94,16 +107,46 @@ class MainViewModel : ViewModel() {
 
     fun cancel() { job?.cancel() }
 
-    private fun run(block: suspend () -> Unit) {
+    /** Runs one scan at a time; [what] names it in the notification and in the after-crash notice. */
+    private fun run(what: String, block: suspend () -> Unit) {
         if (busy) { toast.value = "Another scan is running"; return }
         job = viewModelScope.launch {
+            ScanKeeper.begin(what)
+            CrashGuard.scanStarted(what)
+            val ticker = launch { while (true) { status()?.let { (t, p) -> ScanKeeper.update(t, p) }; delay(500) } }
             try { block() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
                 toast.value = e.message ?: e.toString()
+            } finally {
+                ticker.cancel()
+                ScanKeeper.end()
+                CrashGuard.scanEnded()
             }
         }
     }
 
-    fun scanJunk() = run {
+    /** Notification line + bar for whatever is running now. */
+    private fun status(): Pair<String, Float?>? {
+        fun frac(d: Int, t: Int) = if (t > 0) d.toFloat() / t else null
+        (junk.value as? Junk.Scanning)?.let { return "%,d files checked".format(it.count) to null }
+        (junk.value as? Junk.Cleaning)?.let { return "Cleaning ${it.done} of ${it.total}" to frac(it.done, it.total) }
+        (sec.value as? Sec.Scanning)?.p?.let { return "${it.phase}: ${it.done} of ${it.total}" to frac(it.done, it.total) }
+        (dupes.value as? Dupes.Hashing)?.let { return "Comparing ${it.done} of ${it.total}" to frac(it.done, it.total) }
+        (store.value as? Store.Scanning)?.let { return "%,d files measured".format(it.count) to null }
+        return null
+    }
+
+    /** Re-runs the scan named in [CrashGuard.Notice.scan]. */
+    fun rerun(what: String?) {
+        notice.value = null
+        when (what) {
+            JUNK, CLEANING -> scanJunk()
+            SECURITY -> scanThreats()
+            STORAGE, DELETING -> scanStorage()
+            DUPES -> findDuplicates()
+        }
+    }
+
+    fun scanJunk() = run(JUNK) {
         junk.value = Junk.Scanning("", 0)
         try {
             val r = JunkScanner.scan { p, n -> junk.value = Junk.Scanning(p, n) }
@@ -114,7 +157,7 @@ class MainViewModel : ViewModel() {
     }
 
     /** Cleans [items] (the caller decides: auto categories, or the user's ticked review items). */
-    fun clean(items: List<JunkItem>) = run {
+    fun clean(items: List<JunkItem>) = run(CLEANING) {
         val before = (junk.value as? Junk.Found)?.result ?: (junk.value as? Junk.Cleaned)?.result ?: return@run
         junk.value = Junk.Cleaning(0, items.size)
         val report = Cleaner.clean(items) { d, t -> junk.value = Junk.Cleaning(d, t) }
@@ -123,7 +166,7 @@ class MainViewModel : ViewModel() {
         junk.value = Junk.Cleaned(report, left)
     }
 
-    fun scanThreats() = run {
+    fun scanThreats() = run(SECURITY) {
         if (Sigs.get() == null) updateSignaturesNow()
         sec.value = Sec.Scanning(ThreatProgress("Starting", "", 0, 0, 0))
         try {
@@ -173,7 +216,7 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun scanStorage() = run {
+    fun scanStorage() = run(STORAGE) {
         store.value = Store.Scanning("", 0)
         dupes.value = Dupes.Idle
         try {
@@ -183,7 +226,7 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun findDuplicates() = run {
+    fun findDuplicates() = run(DUPES) {
         val entries: List<Entry> = (store.value as? Store.Done)?.report?.entries ?: kotlin.run {
             val r = StorageAnalyzer.scan { p, n -> store.value = Store.Scanning(p, n) }
             store.value = Store.Done(r)
@@ -197,7 +240,7 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun deleteMany(paths: List<String>) = run {
+    fun deleteMany(paths: List<String>) = run(DELETING) {
         var ok = 0
         var freed = 0L
         val gone = HashSet<String>()
@@ -213,9 +256,14 @@ class MainViewModel : ViewModel() {
     }
 
     fun scanBattery() = viewModelScope.launch {
-        battery.value = runCatching { BatteryAnalyzer.scan() }.getOrElse {
-            toast.value = it.message; null
-        }
+        if (batteryLoading.value) return@launch
+        batteryLoading.value = true
+        try {
+            battery.value = runCatching { BatteryAnalyzer.scan() }.getOrElse {
+                if (it is kotlinx.coroutines.CancellationException) throw it
+                toast.value = it.message; battery.value
+            }
+        } finally { batteryLoading.value = false }
     }
 
     fun checkUpdate() = viewModelScope.launch { Updater.check() }
@@ -228,5 +276,14 @@ class MainViewModel : ViewModel() {
             return
         }
         viewModelScope.launch { Updater.downloadAndInstall(r) }
+    }
+
+    companion object {
+        const val JUNK = "Junk scan"
+        const val CLEANING = "Cleaning"
+        const val SECURITY = "Security scan"
+        const val STORAGE = "Storage scan"
+        const val DUPES = "Duplicate search"
+        const val DELETING = "Deleting files"
     }
 }

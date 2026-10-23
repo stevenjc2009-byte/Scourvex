@@ -41,6 +41,7 @@ import com.scourvex.app.ui.components.GhostButton
 import com.scourvex.app.ui.components.GlowCard
 import com.scourvex.app.ui.components.NeonBar
 import com.scourvex.app.ui.components.NeonButton
+import com.scourvex.app.ui.components.ScanBar
 import com.scourvex.app.ui.components.ScanOrb
 import com.scourvex.app.ui.components.SectionTitle
 import com.scourvex.app.ui.theme.Neon
@@ -72,6 +73,7 @@ fun StorageScreen(vm: MainViewModel, access: Access) {
                     is Store.Done -> ScanOrb(formatBytes(s.report.entries.sumOf { it.size }), "in %,d files".format(s.report.entries.size), false, null, accent = Neon.Amber)
                 }
             }
+            (state as? Store.Scanning)?.let { s -> ScanBar("Measuring files · ${"%,d".format(s.count)} so far", null, accent = Neon.Amber); Gap(10) }
             if (vm.busy) GhostButton("Stop", Modifier.fillMaxWidth(), Neon.Red) { vm.cancel() }
             else NeonButton(if (state is Store.Done) "Rescan" else "Analyse storage", Modifier.fillMaxWidth()) { vm.scanStorage() }
             Gap(14)
@@ -140,7 +142,7 @@ fun StorageScreen(vm: MainViewModel, access: Access) {
                 Dupes.Idle -> item { NeonButton("Find duplicates", Modifier.fillMaxWidth(), enabled = !vm.busy) { vm.findDuplicates() } }
                 is Dupes.Hashing -> item {
                     Text("Comparing ${d.done} / ${d.total} candidates…", color = Neon.Cyan)
-                    Gap(6); NeonBar(if (d.total > 0) d.done.toFloat() / d.total else 0f)
+                    Gap(6); ScanBar("Same-size files are being compared byte for byte", if (d.total > 0) d.done.toFloat() / d.total else null)
                 }
                 is Dupes.Done -> {
                     item { Text("${d.groups.size} group${if (d.groups.size == 1) "" else "s"} · ${formatBytes(d.groups.sumOf { it.wasted })} wasted. The oldest copy is kept unticked.", color = Neon.Dim) }

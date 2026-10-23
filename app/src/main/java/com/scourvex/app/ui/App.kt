@@ -25,7 +25,9 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -112,6 +114,46 @@ fun ScourvexAppUi(vm: MainViewModel = viewModel()) {
         }
         SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp))
     }
+    RecoveryDialog(vm) { tab = it; settings = false }
+}
+
+/** After a crash, or when Android closed the app mid-scan: say so and offer to run the scan again. */
+@Composable
+private fun RecoveryDialog(vm: MainViewModel, show: (Tab) -> Unit) {
+    val n by vm.notice.collectAsStateWithLifecycle()
+    val notice = n ?: return
+    val clip = androidx.compose.ui.platform.LocalClipboardManager.current
+    val what = notice.scan
+    AlertDialog(
+        onDismissRequest = { vm.notice.value = null },
+        containerColor = Neon.Surface,
+        title = { Text(if (notice.crashed) "Scourvex closed unexpectedly" else "${what ?: "A scan"} did not finish", color = Neon.Text) },
+        text = {
+            Text(when {
+                notice.crashed && what != null -> "It stopped during: $what. Nothing was lost; results from that run were not saved."
+                notice.crashed -> "Nothing was lost. If it keeps happening, copy the details and report it on GitHub."
+                else -> "Android closed Scourvex while it was running (low memory or battery saver). Nothing was lost."
+            }, color = Neon.Dim)
+        },
+        confirmButton = {
+            if (what != null) TextButton({
+                // Open the screen the scan belongs to, so its progress is visible.
+                show(when (what) {
+                    MainViewModel.SECURITY -> Tab.SECURITY
+                    MainViewModel.STORAGE, MainViewModel.DUPES, MainViewModel.DELETING -> Tab.STORAGE
+                    else -> Tab.CLEAN
+                })
+                vm.rerun(what)
+            }) { Text("Run it again", color = Neon.Lime) }
+            else TextButton({ vm.notice.value = null }) { Text("OK", color = Neon.Cyan) }
+        },
+        dismissButton = {
+            Row {
+                notice.trace?.let { t -> TextButton({ clip.setText(androidx.compose.ui.text.AnnotatedString(t)); vm.toast.value = "Details copied" }) { Text("Copy details", color = Neon.Dim) } }
+                if (what != null) TextButton({ vm.notice.value = null }) { Text("Not now", color = Neon.Dim) }
+            }
+        },
+    )
 }
 
 @Composable

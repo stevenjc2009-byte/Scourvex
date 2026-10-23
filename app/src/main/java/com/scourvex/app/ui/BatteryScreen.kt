@@ -25,6 +25,7 @@ import com.scourvex.app.ui.components.Banner
 import com.scourvex.app.ui.components.GlowCard
 import com.scourvex.app.ui.components.NeonBar
 import com.scourvex.app.ui.components.NeonButton
+import com.scourvex.app.ui.components.ScanBar
 import com.scourvex.app.ui.components.ScanOrb
 import com.scourvex.app.ui.components.SectionTitle
 import com.scourvex.app.ui.theme.Neon
@@ -33,6 +34,7 @@ import com.scourvex.app.ui.theme.Neon
 fun BatteryScreen(vm: MainViewModel, access: Access) {
     val ctx = LocalContext.current
     val report by vm.battery.collectAsStateWithLifecycle()
+    val loading by vm.batteryLoading.collectAsStateWithLifecycle()
     LaunchedEffect(access.shizuku, access.usage) { vm.scanBattery() }
 
     Page {
@@ -41,7 +43,8 @@ fun BatteryScreen(vm: MainViewModel, access: Access) {
             Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
                 ScanOrb(r?.apps?.size?.toString() ?: "…", if (r == null) "Reading battery stats" else "apps drawing power", r == null, null, accent = Neon.Lime)
             }
-            NeonButton("Refresh", Modifier.fillMaxWidth(), brush = Neon.Safe) { vm.scanBattery() }
+            if (loading) { ScanBar("Reading battery stats", null, accent = Neon.Lime); Gap(10) }
+            NeonButton("Refresh", Modifier.fillMaxWidth(), brush = Neon.Safe, enabled = !loading) { vm.scanBattery() }
             Gap(14)
         }
         if (access.shizuku != Shell.State.READY) item {

@@ -174,8 +174,10 @@ object ThreatScanner {
             total.set(seen.get())
             appsJob.join()
             queue.close()
-            progress(ThreatProgress("Device", "Checking settings and spyware traces…", 0, 0, synchronized(lock) { threats.size }))
+            // The walk is done but the workers are still inspecting what it queued: say so, not "Device".
+            progress(ThreatProgress("Files", "Inspecting files and app packages…", done.get(), total.get(), synchronized(lock) { threats.size }))
             pool.joinAll()
+            progress(ThreatProgress("Device", "Checking settings and spyware traces…", 0, 0, synchronized(lock) { threats.size }))
             Perf.log("ThreatScanner.inspect", (System.nanoTime() - t0All) / 1_000_000,
                 "files=${seen.get()} inspected=${inspected.get()} bytesRead=$bytes workers=$workers")
             apkAcc.flush()

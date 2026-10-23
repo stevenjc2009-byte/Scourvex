@@ -31,6 +31,7 @@ import com.scourvex.app.ui.components.Banner
 import com.scourvex.app.ui.components.GhostButton
 import com.scourvex.app.ui.components.GlowCard
 import com.scourvex.app.ui.components.NeonButton
+import com.scourvex.app.ui.components.ScanBar
 import com.scourvex.app.ui.components.ScanOrb
 import com.scourvex.app.ui.components.SectionTitle
 import com.scourvex.app.ui.components.Stat
@@ -61,6 +62,11 @@ fun SecurityScreen(vm: MainViewModel, access: Access) {
             }
         }
         item {
+            (state as? Sec.Scanning)?.p?.let { p ->
+                ScanBar(if (p.total > 0) "${p.phase} · ${p.done} of ${p.total}" else "${p.phase} · ${p.current.takeLast(48)}",
+                    if (p.total > 0) p.done.toFloat() / p.total else null, accent = Neon.Magenta)
+                Gap(10)
+            }
             if (state is Sec.Scanning) GhostButton("Stop", Modifier.fillMaxWidth(), Neon.Red) { vm.cancel() }
             else NeonButton("Full scan", Modifier.fillMaxWidth(), enabled = info != null || sigMsg == null) { vm.scanThreats() }
             Gap(14)
@@ -121,7 +127,8 @@ private fun SignatureCard(info: Sigs.Info?, msg: String?, update: () -> Unit) {
                 Text("%,d hashes · %,d body sigs · %,d stalkerware · %,d spyware IOCs".format(info.md5, info.body, info.stalkerware, info.spyware),
                     color = Neon.Dim, style = MaterialTheme.typography.labelSmall)
             }
-            if (msg != null) Text(msg, color = if (msg.contains("failed")) Neon.Red else Neon.Cyan, style = MaterialTheme.typography.bodyMedium)
+            if (msg != null && msg.contains("failed")) Text(msg, color = Neon.Red, style = MaterialTheme.typography.bodyMedium)
+            else if (msg != null) { Gap(6); ScanBar(msg, Regex("(\\d+)%").find(msg)?.groupValues?.get(1)?.toFloat()?.div(100f)) }
             Gap(8)
             GhostButton("Update signatures", onClick = update)
         }
