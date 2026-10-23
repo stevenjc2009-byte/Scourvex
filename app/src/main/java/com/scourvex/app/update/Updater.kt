@@ -94,7 +94,8 @@ object Updater {
 
     private suspend fun installWithShizuku(apk: File): Boolean {
         if (!Shell.ready) return false
-        val r = Shell.exec("pm install -r -t -i ${BuildConfig.APPLICATION_ID} '${apk.absolutePath}'") ?: return false
+        // system_server can't open files on /sdcard (SELinux fuse denial), so stream the APK through stdin.
+        val r = Shell.exec("cat '${apk.absolutePath}' | pm install -r -t -i ${BuildConfig.APPLICATION_ID} -S ${apk.length()}") ?: return false
         // On success the process is killed by the update; reaching here with an error means fall back.
         return r.first == 0 && r.second.contains("Success")
     }
