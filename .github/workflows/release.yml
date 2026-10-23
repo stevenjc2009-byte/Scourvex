@@ -19,9 +19,11 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
       - name: Decode keystore
         run: echo "${{ secrets.SCOURVEX_KEYSTORE_B64 }}" | base64 -d > release.jks
-      - name: Test and build
+      - name: Build signed APK
         env:
           SCOURVEX_STOREFILE: release.jks
           SCOURVEX_STOREPASSWORD: ${{ secrets.SCOURVEX_STOREPASSWORD }}
