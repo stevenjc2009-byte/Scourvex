@@ -77,6 +77,8 @@ fun ScourvexAppUi(vm: MainViewModel = viewModel()) {
     LifecycleResumeEffect(Unit) { Shell.refresh(); resumes++; onPauseOrDispose { } }
     val shizuku by Shell.state.collectAsStateWithLifecycle()
     val access = remember(resumes, shizuku) { Access(Perms.allFiles(), Perms.usage(ctx), shizuku) }
+    // Shizuku can grant usage access itself, which sidesteps Android's restricted-setting block.
+    LaunchedEffect(shizuku) { if (UsageAccess.autoGrant(ctx)) resumes++ }
 
     val snack = remember { SnackbarHostState() }
     val toast by vm.toast.collectAsStateWithLifecycle()
@@ -117,6 +119,7 @@ fun ScourvexAppUi(vm: MainViewModel = viewModel()) {
         SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp))
     }
     RecoveryDialog(vm) { tab = it; settings = false }
+    UsageHelpDialog { resumes++ }
 }
 
 /** After a crash, or when Android closed the app mid-scan: say so and offer to run the scan again. */

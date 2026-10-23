@@ -128,10 +128,15 @@ fun ScanOrb(
     size: Dp = 240.dp,
     accent: Color = Neon.Cyan,
 ) {
-    val t = rememberInfiniteTransition(label = "orb")
-    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(if (active) 1600 else 9000, easing = LinearEasing)), label = "spin")
-    val spin2 by t.animateFloat(360f, 0f, infiniteRepeatable(tween(if (active) 2600 else 14000, easing = LinearEasing)), label = "spin2")
-    val pulse by t.animateFloat(0.85f, 1f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "pulse")
+    // Idle orbs stay still: a forever-running animation redraws every frame while the app is open
+    // (measured ~1.2 CPU cores on Home on the emulator, 0 with this). It only moves while a scan runs.
+    var spin = 0f; var spin2 = 0f; var pulse = 1f
+    if (active) {
+        val t = rememberInfiniteTransition(label = "orb")
+        spin = t.animateFloat(0f, 360f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "spin").value
+        spin2 = t.animateFloat(360f, 0f, infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "spin2").value
+        pulse = t.animateFloat(0.85f, 1f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "pulse").value
+    }
     val shown by animateFloatAsState(progress ?: 0f, label = "progress")
 
     Box(modifier.size(size), contentAlignment = Alignment.Center) {

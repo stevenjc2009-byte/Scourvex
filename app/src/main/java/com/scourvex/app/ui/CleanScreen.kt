@@ -81,7 +81,7 @@ fun CleanScreen(vm: MainViewModel, access: Access) {
         if (!access.allFiles) item { Banner("Grant all-files access first", Neon.Red, "Grant") { Perms.openAllFiles(ctx) }; Gap() }
         (state as? Junk.Cleaned)?.report?.let { r ->
             if (r.cacheNote != null) item { Banner(r.cacheNote, Neon.Amber); Gap() }
-            if (r.failed.isNotEmpty()) item { Banner("${r.failed.size} items could not be deleted (in use or protected)", Neon.Amber); Gap() }
+            if (r.failed.isNotEmpty()) item { FailedList(r.failed, access); Gap() }
         }
         if (result == null) return@Page
         if (!result.privileged) item { Banner("Android/data and obb skipped — start Shizuku to clean them", Neon.Amber); Gap() }
@@ -169,3 +169,20 @@ private fun ItemLine(i: JunkItem, ticked: MutableList<String>?) {
 private const val MAX_SHOWN = 60
 
 private fun plural(n: Int, word: String) = if (n == 1) "1 $word" else "%,d ${word}s".format(n)
+
+/** Which items were not deleted and why, so "could not be deleted" is never a mystery. Tap to show the list. */
+@Composable
+private fun FailedList(failed: List<String>, access: Access) {
+    var open by remember { mutableStateOf(false) }
+    val locked = failed.count { com.scourvex.app.core.Files.isRestricted(it) || it.startsWith("/data/") }
+    val head = "${failed.size} item${if (failed.size == 1) "" else "s"} not deleted" + when {
+        locked > 0 && access.shizuku != com.scourvex.app.shizuku.Shell.State.READY -> " — $locked need Shizuku (Android/data is locked to other apps)"
+        else -> " — in use by an app or protected by Android"
+    }
+    Banner(head, Neon.Amber, if (open) "Hide" else "Show") { open = !open }
+    if (open) failed.forEach { p ->
+        val why = if (com.scourvex.app.core.Files.isRestricted(p) || p.startsWith("/data/")) "needs Shizuku" else "in use or protected"
+        Text("• ${p.removePrefix("/storage/emulated/0")}  ($why)", color = Neon.Dim, style = MaterialTheme.typography.labelSmall,
+            maxLines = 2, overflow = TextOverflow.StartEllipsis)
+    }
+}

@@ -8,11 +8,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,7 +15,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -85,12 +79,6 @@ fun HomeScreen(vm: MainViewModel, access: Access, go: (Tab) -> Unit) {
                 }
             }
         }
-        item { SectionTitle("Tools") }
-        item {
-            ToolCard("Security scan", "ClamAV, spyware indicators, app and settings audit", Neon.Red) { go(Tab.SECURITY) }
-            ToolCard("Storage killers", "Biggest files, folders, apps and duplicates", Neon.Amber) { go(Tab.STORAGE) }
-            ToolCard("Battery drainers", "Apps using the most power since the last charge", Neon.Lime) { go(Tab.BATTERY) }
-        }
     }
 }
 
@@ -106,22 +94,6 @@ private fun AccessCards(a: Access, ctx: android.content.Context) {
         if (!a.allFiles) { Banner("All-files access is needed to scan storage", Neon.Red, "Grant") { Perms.openAllFiles(ctx) }; Gap() }
         if (!a.usage) { Banner("Usage access lets Scourvex size app caches and rank battery use", Neon.Amber, "Grant") { Perms.openUsage(ctx) }; Gap() }
     }
-}
-
-@Composable
-private fun ToolCard(title: String, detail: String, color: Color, onClick: () -> Unit) {
-    GlowCard(glow = color, onClick = onClick) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(12.dp).padding(0.dp)) { androidx.compose.foundation.Canvas(Modifier.size(12.dp)) { drawCircle(color) } }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, color = Neon.Text)
-                Text(detail, style = MaterialTheme.typography.bodyMedium, color = Neon.Dim)
-            }
-            Icon(Icons.Rounded.ChevronRight, null, tint = color)
-        }
-    }
-    Gap()
 }
 
 @Composable

@@ -25,7 +25,11 @@ object Perms {
         Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}")),
         Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
 
-    fun openUsage(ctx: Context) = open(ctx,
+    /** Every "Grant usage access" button: explains the restricted-setting block and offers Shizuku first. */
+    @Suppress("UNUSED_PARAMETER")
+    fun openUsage(ctx: Context) { UsageAccess.help.value = true }
+
+    fun openUsageSettings(ctx: Context) = open(ctx,
         Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, Uri.parse("package:${ctx.packageName}")),
         Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
 
