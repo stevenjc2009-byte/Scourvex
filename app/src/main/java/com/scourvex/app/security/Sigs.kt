@@ -3,6 +3,7 @@ package com.scourvex.app.security
 import com.scourvex.app.BuildConfig
 import com.scourvex.app.ScourvexApp
 import com.scourvex.app.core.Net
+import com.scourvex.app.core.Perf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +37,7 @@ object Sigs {
     /** Loads the pack from disk if present. Returns null when none has been downloaded yet. */
     suspend fun get(): SigPack? = lock.withLock {
         pack ?: withContext(Dispatchers.IO) {
-            if (!file.exists()) null else runCatching { SigPack.load(file) }.getOrNull()?.also { setLoaded(it) }
+            if (!file.exists()) null else runCatching { Perf.time("Sigs.coldLoad", { "bytes=${file.length()}" }) { SigPack.load(file) } }.getOrNull()?.also { setLoaded(it) }
         }
     }
 

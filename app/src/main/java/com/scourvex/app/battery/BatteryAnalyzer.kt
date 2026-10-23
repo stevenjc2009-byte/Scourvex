@@ -4,6 +4,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import com.scourvex.app.ScourvexApp
 import com.scourvex.app.clean.JunkScanner
+import com.scourvex.app.core.Perf
 import com.scourvex.app.shizuku.Shell
 
 data class PowerUse(
@@ -24,9 +25,14 @@ data class BatteryReport(val apps: List<PowerUse>, val source: String)
 object BatteryAnalyzer {
 
     suspend fun scan(): BatteryReport {
+        var n = 0
+        return Perf.time("BatteryAnalyzer.scan", { "rows=$n" }) { scanTimed().also { n = it.apps.size } }
+    }
+
+    private suspend fun scanTimed(): BatteryReport {
         val ctx = ScourvexApp.instance
         // Only the power section: the full dump can be megabytes, over the shell service's output cap.
-        val out = Shell.exec("dumpsys batterystats 2>/dev/null | awk '/Estimated power use/{f=1} f&&/^  [^ U]/&&!/Estimated/{exit} f'")
+        val out = Perf.time("BatteryAnalyzer.dumpsys") { Shell.exec("dumpsys batterystats 2>/dev/null | awk '/Estimated power use/{f=1} f&&/^  [^ U]/&&!/Estimated/{exit} f'") }
         if (out != null && out.first == 0) {
             val rows = parse(out.second).map { u ->
                 val pkgs = ctx.packageManager.getPackagesForUid(u.uid)?.toList().orEmpty()

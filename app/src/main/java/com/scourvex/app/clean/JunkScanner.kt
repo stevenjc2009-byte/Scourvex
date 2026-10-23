@@ -9,6 +9,7 @@ import android.os.storage.StorageManager
 import com.scourvex.app.ScourvexApp
 import com.scourvex.app.core.Entry
 import com.scourvex.app.core.Files
+import com.scourvex.app.core.Perf
 import com.scourvex.app.core.SkipGuard
 import com.scourvex.app.core.SkipSet
 
@@ -34,6 +35,11 @@ data class JunkResult(
 object JunkScanner {
 
     suspend fun scan(progress: (String, Int) -> Unit): JunkResult {
+        var scanned = 0
+        return Perf.time("JunkScanner.scan", { "files=$scanned" }) { scanTimed(progress).also { scanned = it.filesScanned } }
+    }
+
+    private suspend fun scanTimed(progress: (String, Int) -> Unit): JunkResult {
         val ctx = ScourvexApp.instance
         val pm = ctx.packageManager
         val installed = pm.getInstalledApplications(PackageManager.MATCH_UNINSTALLED_PACKAGES)
@@ -81,11 +87,15 @@ object JunkScanner {
                 else if (e.path in targets) markNonEmpty(e.path, nonEmpty)
             }
         }
+        val visitAcc = Perf.Acc("JunkScanner.visit")
         val visit = { e: Entry ->
+            val t0 = System.nanoTime()
             // A folder that could not be listed may hold anything: never offer it (or its parents) as empty.
             if (e.unreadable) { nonEmpty.add(e.path); markNonEmpty(e.path, nonEmpty) } else visitEntry(e)
+            visitAcc.add(t0)
         }
         val privileged = Files.walkAll(visit)
+        visitAcc.flush("targets=${targets.size} dirs=${dirs.size}")
 
         // Junk folders that hold a skipped entry stay in the list (size already excludes the skipped part);
         // deleting them goes through the guarded delete, which removes only the non-skipped content.
@@ -93,10 +103,10 @@ object JunkScanner {
         val items = ArrayList<JunkItem>()
         items += targets.values.filter { it.size > 0 || it.category == JunkCategory.LEFTOVERS || it.category == JunkCategory.RECYCLE_BINS }
         items += fileHits
-        items += emptyFolders(dirs, nonEmpty, roots, live)
+        items += Perf.time("JunkScanner.emptyFolders", { "dirs=${dirs.size}" }) { emptyFolders(dirs, nonEmpty, roots, live) }
         items.removeAll { !it.path.startsWith("app:") && live.isSkipped(it.path) }
 
-        val stats = appCaches(ctx, installed.values)
+        val stats = Perf.time("JunkScanner.appCaches", { "apps=${installed.size}" }) { appCaches(ctx, installed.values) }
         if (stats != null) {
             // StorageStats cacheBytes already includes Android/data/<pkg>/cache; don't count it twice.
             val extCache = Regex("""/Android/data/[^/]+/cache$""")

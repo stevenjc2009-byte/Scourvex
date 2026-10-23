@@ -7,6 +7,7 @@ import com.scourvex.app.ScourvexApp
 import com.scourvex.app.clean.JunkScanner
 import com.scourvex.app.core.Entry
 import com.scourvex.app.core.Files
+import com.scourvex.app.core.Perf
 import com.scourvex.app.core.Prefs
 import com.scourvex.app.core.SkipGuard
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +54,12 @@ object ThreatScanner {
 
     private const val WORKERS = 2
 
-    suspend fun scan(progress: (ThreatProgress) -> Unit): ThreatReport = withContext(Dispatchers.IO) {
+    suspend fun scan(progress: (ThreatProgress) -> Unit): ThreatReport {
+        var seen = 0
+        return Perf.time("ThreatScanner.scan", { "files=$seen" }) { scanTimed(progress).also { seen = it.filesSeen } }
+    }
+
+    private suspend fun scanTimed(progress: (ThreatProgress) -> Unit): ThreatReport = withContext(Dispatchers.IO) {
         val pack = Sigs.get() ?: error("Virus signatures are not downloaded yet. Tap Update signatures.")
         val ctx = ScourvexApp.instance
         val pm = ctx.packageManager
@@ -67,6 +73,8 @@ object ThreatScanner {
         @Suppress("DEPRECATION") val pkgs = pm.getInstalledPackages(flags)
         val audit = AppAudit(ctx)
         val inspector = FileInspector(pack)
+        val apkAcc = Perf.Acc("ThreatScanner.apkInspect")
+        val appsT0 = System.nanoTime()
         pkgs.forEachIndexed { i, info ->
             currentCoroutineContext().ensureActive()
             val app = info.applicationInfo ?: return@forEachIndexed
@@ -87,20 +95,26 @@ object ThreatScanner {
                 for (apk in listOfNotNull(app.sourceDir) + (app.splitSourceDirs ?: emptyArray())) {
                     if (!SkipGuard.allows(apk)) continue   // skip list wins even for installed APKs
                     val f = File(apk)
+                    val t0 = System.nanoTime()
                     val v = inspector.inspect(apk, f.length()) { Files.open(apk) }
+                    apkAcc.add(t0, f.length())
                     v.detections.forEach { hit(it, source(it), f.length()) }
                 }
             }
         }
         bytes += inspector.bytesRead
+        apkAcc.flush()
+        Perf.log("ThreatScanner.apps", (System.nanoTime() - appsT0) / 1_000_000, "pkgs=${pkgs.size} apkBytes=${inspector.bytesRead}")
 
         // ---- Every file ----
         progress(ThreatProgress("Files", "Listing storage…", 0, 0, threats.size))
         val entries = ArrayList<Entry>()
-        val privileged = Files.walkAll { e -> if (!e.isDir) entries += e }
+        val privileged = Perf.time("ThreatScanner.listing", { "files=${entries.size}" }) { Files.walkAll { e -> if (!e.isDir) entries += e } }
         val next = AtomicInteger(0)
         val inspected = AtomicInteger(0)
         val lock = Any()
+        val inspectAcc = Perf.Acc("ThreatScanner.inspectCalls")
+        val inspectT0 = System.nanoTime()
         coroutineScope {
             repeat(WORKERS) {
                 launch {
@@ -111,7 +125,10 @@ object ThreatScanner {
                         currentCoroutineContext().ensureActive()
                         val e = entries[idx]
                         if (idx % 200 == 0) progress(ThreatProgress("Files", e.path, idx, entries.size, threats.size))
-                        val v = runCatching { ins.inspect(e.path, e.size) { Files.open(e.path) } }.getOrNull() ?: continue
+                        val t0 = System.nanoTime()
+                        val v = runCatching { ins.inspect(e.path, e.size) { Files.open(e.path) } }.getOrNull()
+                        if (v == null) { inspectAcc.add(t0); continue }
+                        inspectAcc.add(t0, if (v.inspected) e.size else 0)
                         if (v.inspected) inspected.incrementAndGet()
                         synchronized(lock) {
                             v.detections.forEach { d -> threats += Threat(e.path, false, e.name, d, source(d), e.size) }
@@ -122,10 +139,14 @@ object ThreatScanner {
             }
         }
 
+        Perf.log("ThreatScanner.inspect", (System.nanoTime() - inspectT0) / 1_000_000,
+            "files=${entries.size} inspected=${inspected.get()} bytesRead=$bytes workers=$WORKERS")
+        inspectAcc.flush()
+
         progress(ThreatProgress("Device", "Checking settings and spyware traces…", 0, 0, threats.size))
-        threats += SpywareCheck.run(pack.spyware)
-        val device = DeviceAudit.run(ctx)
-        val sensors = SensorUse.read()
+        threats += Perf.time("SpywareCheck.run") { SpywareCheck.run(pack.spyware) }
+        val device = Perf.time("DeviceAudit.run") { DeviceAudit.run(ctx) }
+        val sensors = Perf.time("SensorUse.read") { SensorUse.read() }
 
         // Ignore is per detection: ignoring one finding never hides a different one on the same app or file.
         val visible = threats.filter { it.ignoreKey !in ignored }.distinctBy { it.target to it.detection }

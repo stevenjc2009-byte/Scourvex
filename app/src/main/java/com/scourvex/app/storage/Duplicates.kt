@@ -2,6 +2,7 @@ package com.scourvex.app.storage
 
 import com.scourvex.app.core.Entry
 import com.scourvex.app.core.Files
+import com.scourvex.app.core.Perf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -23,7 +24,15 @@ object Duplicates {
     private const val MIN_SIZE = 4096L
     private const val EDGE = 64 * 1024
 
-    suspend fun find(entries: List<Entry>, progress: (Int, Int) -> Unit): List<DuplicateGroup> = withContext(Dispatchers.IO) {
+    suspend fun find(entries: List<Entry>, progress: (Int, Int) -> Unit): List<DuplicateGroup> {
+        var groups = 0
+        return Perf.time("Duplicates.find", { "entries=${entries.size} groups=$groups" }) { findTimed(entries, progress).also { groups = it.size } }
+    }
+
+    private val edgeAcc = Perf.Acc("Duplicates.edge")
+    private val fullAcc = Perf.Acc("Duplicates.full")
+
+    private suspend fun findTimed(entries: List<Entry>, progress: (Int, Int) -> Unit): List<DuplicateGroup> = withContext(Dispatchers.IO) {
         val bySize = entries.filter { it.size >= MIN_SIZE }.groupBy { it.size }.values.filter { it.size > 1 }
         val total = bySize.sumOf { it.size }
         var done = 0
@@ -38,10 +47,18 @@ object Duplicates {
                 full.values.filter { it.size > 1 }.forEach { out += DuplicateGroup(it[0].size, it) }
             }
         }
+        edgeAcc.flush(); fullAcc.flush()
         out.sortedByDescending { it.wasted }
     }
 
     private suspend fun hash(e: Entry, edgesOnly: Boolean): String? {
+        val t0 = System.nanoTime()
+        val r = hashInner(e, edgesOnly)
+        (if (edgesOnly) edgeAcc else fullAcc).add(t0, if (r == null) 0 else if (edgesOnly) minOf(e.size, 2L * EDGE) else e.size)
+        return r
+    }
+
+    private suspend fun hashInner(e: Entry, edgesOnly: Boolean): String? {
         val md = MessageDigest.getInstance("SHA-256")
         val inp: InputStream = Files.open(e.path) ?: return null
         return runCatching {

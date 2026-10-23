@@ -8,6 +8,7 @@ import com.scourvex.app.ScourvexApp
 import com.scourvex.app.clean.JunkScanner
 import com.scourvex.app.core.Entry
 import com.scourvex.app.core.Files
+import com.scourvex.app.core.Perf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.PriorityQueue
@@ -31,7 +32,12 @@ data class StorageReport(
 /** Biggest storage killers: files, folders, apps and file types, from one walk. */
 object StorageAnalyzer {
 
-    suspend fun scan(progress: (String, Int) -> Unit): StorageReport = withContext(Dispatchers.IO) {
+    suspend fun scan(progress: (String, Int) -> Unit): StorageReport {
+        var seen = 0
+        return Perf.time("StorageAnalyzer.scan", { "files=$seen" }) { scanTimed(progress).also { seen = it.entries.size } }
+    }
+
+    private suspend fun scanTimed(progress: (String, Int) -> Unit): StorageReport = withContext(Dispatchers.IO) {
         val files = ArrayList<Entry>()
         val folder = HashMap<String, LongArray>()     // dir -> [bytes, files], counted at every ancestor
         val roots = Files.roots()
@@ -65,10 +71,10 @@ object StorageAnalyzer {
         val byType = HashMap<String, Long>()
         for (e in files) byType.merge(typeOf(e.name), e.size, Long::plus)
 
-        val apps = apps()
+        val apps = Perf.time("StorageAnalyzer.apps") { apps() }
         StorageReport(
             top.sortedByDescending { it.size }, folders.sortedByDescending { it.size },
-            apps, byType, files, privileged, UnusedApps.find(apps),
+            apps, byType, files, privileged, Perf.time("UnusedApps.find") { UnusedApps.find(apps) },
         )
     }
 

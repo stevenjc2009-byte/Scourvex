@@ -44,26 +44,34 @@ object Files {
      */
     suspend fun walkAll(visit: (Entry) -> Unit): Boolean {
         var privileged = true
+        var n = 0
+        return Perf.time("Files.walkAll", { "entries=$n privileged=$privileged" }) {
+        val counted = { e: Entry -> n++; visit(e) }
         for (root in roots()) {
             val blocked = restricted(root)
-            walkDirect(File(root), visit, blocked)
+            walkDirect(File(root), counted, blocked)
             for (b in blocked) {
                 if (SkipGuard.isSkipped(b)) continue
-                if (!walkShell(b, visit)) privileged = false
+                if (!walkShell(b, counted)) privileged = false
             }
         }
-        return privileged
+        privileged
+        }
     }
 
     /** Walks [dir] directly; [exclude] folders are left for the shell walker. Unlistable folders are reported [Entry.unreadable]. */
     suspend fun walkDirect(dir: File, visit: (Entry) -> Unit, exclude: List<String> = emptyList()) {
         if (!SkipGuard.allows(dir.path)) return
+        var n = 0
+        var dirs = 0
+        Perf.time("Files.walkDirect", { "root=${dir.path} entries=$n dirs=$dirs" }) {
         val stack = ArrayDeque<File>().apply { add(dir) }
         while (stack.isNotEmpty()) {
             currentCoroutineContext().ensureActive()
             val d = stack.removeLast()
             val g = SkipGuard.live()          // re-read per directory: additions mid-scan apply
             if (g.isSkipped(d.path)) continue
+            dirs++
             val children = d.listFiles()
             if (children == null) { visit(Entry(d.path, 0, 0, true, unreadable = true)); continue }
             for (f in children) {
@@ -71,6 +79,7 @@ object Files {
                 // Name check first: no stat, isDirectory or symlink probe ever touches a skipped child.
                 if (g.isSkipped(p) || under(p, exclude)) continue
                 if (java.nio.file.Files.isSymbolicLink(f.toPath())) continue
+                n++
                 if (f.isDirectory) {
                     visit(Entry(p, 0, f.lastModified(), true))
                     stack.add(f)
@@ -79,21 +88,27 @@ object Files {
                 }
             }
         }
+        }
     }
 
     /** Walks [root] as shell uid. Returns false when Shizuku is not available. */
     suspend fun walkShell(root: String, visit: (Entry) -> Unit): Boolean {
         if (!SkipGuard.allows(root)) return true
-        val pfd = Shell.walkPipe(root, SkipGuard.live().raw) ?: return false
-        ParcelFileDescriptor.AutoCloseInputStream(pfd).bufferedReader().useLines { lines ->
-            for (ln in lines) {
+        var lines = 0
+        var visited = 0
+        return Perf.time("Files.walkShell", { "root=$root lines=$lines entries=$visited" }) {
+        val pfd = Shell.walkPipe(root, SkipGuard.live().raw) ?: return@time false
+        ParcelFileDescriptor.AutoCloseInputStream(pfd).bufferedReader().useLines { seq ->
+            for (ln in seq) {
+                lines++
                 currentCoroutineContext().ensureActive()
                 val a = ln.split('\t', limit = 4)
                 // The service got the list at start; entries for paths skipped since are discarded here.
-                if (a.size == 4 && !SkipGuard.isSkipped(a[3])) visit(Entry(a[3], a[0].toLong(), a[1].toLong(), a[2] != "f", unreadable = a[2] == "u"))
+                if (a.size == 4 && !SkipGuard.isSkipped(a[3])) { visited++; visit(Entry(a[3], a[0].toLong(), a[1].toLong(), a[2] != "f", unreadable = a[2] == "u")) }
             }
         }
-        return true
+        true
+        }
     }
 
     /** Opens a file for reading, through Shizuku when it lives in a restricted folder. Null for skipped paths. */
